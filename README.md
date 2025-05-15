@@ -43,6 +43,7 @@ Optional:
 Tested on:
 	•	Python 3.10+
 	•	macOS (M3 Ultra), Windows, Linux
+```
 
 ## 🚀 How to Run
 
