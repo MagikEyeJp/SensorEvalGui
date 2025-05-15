@@ -54,6 +54,7 @@ python -m sensor_eval
 	3.	Output saved to output/ folder in the selected directory
 
 ##📊 Outputs
+
 	•	📈 snr_signal.png: SNR vs Signal (DN)
 	•	📉 snr_exposure.png: SNR vs Exposure Ratio
 	•	📋 summary.txt: Key evaluation metrics
@@ -61,6 +62,7 @@ python -m sensor_eval
 	•	📑 roi_stats.csv: (Planned) Per-condition stats
 
 ##🔮 Planned Features
+
 	•	ROI/pixel mode switching in GUI
 	•	Configurable pipeline via default_config.json
 	•	Support for multi-gain and multi-exposure batch evaluation
@@ -69,6 +71,7 @@ python -m sensor_eval
 	•	CI tests (PyTest + GitHub Actions)
 
 ##🧪 Example Stack Structure
+
 project/
 ├── graychart/
 │   ├── gain0dB_exp1x/
