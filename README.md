@@ -16,19 +16,19 @@ This project aims to:
 
 ## 🏗 Directory Structure
 
-sensor_eval/
-├── main.py                  # Entry point for GUI
-├── gui/
-│   └── main_window.py           # Main PySide6 GUI logic
-├── core/
-│   ├── loader.py                # TIFF loader and folder scanner
-│   ├── analysis.py              # ROI-based stats, SNR, DR
-│   ├── plotting.py              # Graph generation with matplotlib
-│   └── report_gen.py            # summary.txt and HTML report
-├── config/
-│   └── default_config.json      # (Planned) configurable behavior
-└── utils/
-└── logger.py                # (Planned) logging utilities
+	sensor_eval/
+	├── main.py                  # Entry point for GUI
+	├── gui/
+	│   └── main_window.py           # Main PySide6 GUI logic
+	├── core/
+	│   ├── loader.py                # TIFF loader and folder scanner
+	│   ├── analysis.py              # ROI-based stats, SNR, DR
+	│   ├── plotting.py              # Graph generation with matplotlib
+	│   └── report_gen.py            # summary.txt and HTML report
+	├── config/
+	│   └── default_config.json      # (Planned) configurable behavior
+	└── utils/
+	└── logger.py                # (Planned) logging utilities
 
 ---
 
@@ -72,13 +72,13 @@ python -m sensor_eval
 
 ##🧪 Example Stack Structure
 
-project/
-├── graychart/
-│   ├── gain0dB_exp1x/
-│   ├── gain0dB_exp2x/
-│   └── ...
-├── flat/
-├── dark/
+	project/
+	├── graychart/
+	│   ├── gain0dB_exp1x/
+	│   ├── gain0dB_exp2x/
+	│   └── ...
+	├── flat/
+	├── dark/
 
 📎 Reference (Gist Legacy)
 
