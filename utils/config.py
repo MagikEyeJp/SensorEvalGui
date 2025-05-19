@@ -1,49 +1,71 @@
-# utils/config.py
-"""Utility functions for loading the evaluation config.
-
-- Looks for a `config.yaml` in the selected *project* directory.
-- Falls back to the repository‑level `config/default_config.yaml` if none found.
-- Exposes a single helper `load_config(project_dir)` returning a `dict`.
-"""
+# generated: 2025-05-18T09:57:00Z (auto)
+# utils/config.py – Config utilities (Spec-complete, nested‑dict gains/exposures)
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict, Any, List, Tuple
 
 import yaml
 
-# Path to the repo‑default config (relative to the repo root)
-_REPO_DEFAULT = Path(__file__).resolve().parents[1] / "config" / "default_config.yaml"
+__all__ = [
+    "load_config",
+    "gain_entries",
+    "exposure_entries",
+    "find_gain_folder",
+    "find_exposure_folder",
+]
+
+# -----------------------------------------------------------------------------
+# Load & merge config
+# -----------------------------------------------------------------------------
+_DEFAULT_CFG_PATH = Path(__file__).parent.parent / "config" / "default_config.yaml"
 
 
-def load_config(project_dir: Path | str) -> Dict[str, Any]:
-    """Load *project*/config.yaml, fallback to repo default.
+def _read_yaml(path: Path) -> Dict[str, Any]:
+    with path.open("r", encoding="utf-8") as fh:
+        return yaml.safe_load(fh) or {}
 
-    Parameters
-    ----------
-    project_dir : Path | str
-        The directory selected by the user (top‑level *project* folder).
 
-    Returns
-    -------
-    dict
-        Parsed YAML config as a nested dictionary.
-    """
-    project_dir = Path(project_dir).expanduser().resolve()
-    cfg_path = project_dir / "config.yaml"
+def _merge_dict(dst: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursive dict merge (src overwrites dst)."""
+    for k, v in src.items():
+        if isinstance(v, dict) and isinstance(dst.get(k), dict):
+            dst[k] = _merge_dict(dst[k], v)
+        else:
+            dst[k] = v
+    return dst
 
-    if not cfg_path.exists():
-        cfg_path = _REPO_DEFAULT
 
-    try:
-        with cfg_path.open("r", encoding="utf-8") as fh:
-            cfg: Dict[str, Any] = yaml.safe_load(fh) or {}
-    except yaml.YAMLError as exc:
-        raise RuntimeError(f"Failed to parse YAML config: {cfg_path}\n{exc}") from exc
+def load_config(project_cfg_path: Path | str) -> Dict[str, Any]:
+    """Return merged config dict (default <- project)."""
+    default_cfg = _read_yaml(_DEFAULT_CFG_PATH)
+    project_cfg = _read_yaml(Path(project_cfg_path))
+    return _merge_dict(default_cfg, project_cfg)
 
-    # Inject convenience keys
-    cfg.setdefault("_paths", {})["config_file"] = str(cfg_path)
-    cfg.setdefault("_paths", {})["project_dir"] = str(project_dir)
+# -----------------------------------------------------------------------------
+# Measurement helpers (nested-dict access)
+# -----------------------------------------------------------------------------
 
-    return cfg
+def gain_entries(cfg: Dict[str, Any]) -> List[Tuple[float, str]]:
+    """Return sorted list of (gain_db, folder)."""
+    gains = cfg["measurement"]["gains"]
+    return sorted([(float(db), meta["folder"]) for db, meta in gains.items()], key=lambda x: x[0])
+
+
+def exposure_entries(cfg: Dict[str, Any]) -> List[Tuple[float, str]]:
+    """Return sorted list of (ratio, folder) descending by ratio."""
+    exps = cfg["measurement"]["exposures"]
+    return sorted([(float(r), meta["folder"]) for r, meta in exps.items()], key=lambda x: -x[0])
+
+
+def find_gain_folder(project: Path | str, gain_db: float, cfg: Dict[str, Any]) -> Path:
+    project = Path(project)
+    folder = cfg["measurement"]["gains"][str(int(gain_db))]["folder"]
+    return project / folder
+
+
+def find_exposure_folder(project: Path | str, gain_db: float, ratio: float, cfg: Dict[str, Any]) -> Path:
+    gain_path = find_gain_folder(project, gain_db, cfg)
+    exp_folder = cfg["measurement"]["exposures"][str(ratio)]["folder"]
+    return gain_path / exp_folder

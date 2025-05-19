@@ -1,12 +1,14 @@
-# core/plotting.py – config‑aware matplotlib routines
+# core/plotting.py – Spec‑aware plotting utilities
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+from utils import config as cfgutil
 
 __all__ = [
     "plot_snr_vs_signal",
@@ -14,31 +16,14 @@ __all__ = [
 ]
 
 
-def _maybe_color(idx: int, cfg: Dict) -> str | None:
-    """Return color if color_by_exposure is True, else None (use default)."""
-    if cfg.get("plot", {}).get("color_by_exposure", False):
-        # Simple deterministic color map (tab10 cycles)
-        return plt.cm.tab10(idx % 10)
-    return None
+def _auto_labels(ratios: Sequence[float]) -> list[str]:
+    return [f"{r:g}×" for r in ratios]
 
 
-def plot_snr_vs_signal(signal: np.ndarray, snr: np.ndarray, cfg: Dict, output_path: Path) -> None:
-    """Plot SNR–Signal curve and save to *output_path*.
-
-    Parameters
-    ----------
-    signal : np.ndarray
-        X‑axis values (DN).
-    snr : np.ndarray
-        SNR values.
-    cfg : dict
-        YAML config with keys under cfg["plot"].
-    output_path : Path
-        Destination PNG path.
-    """
+def plot_snr_vs_signal(signal: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any], output_path: Path):
+    """Plot SNR–Signal curve and save PNG."""
     plt.figure()
-    color = _maybe_color(0, cfg)
-    plt.plot(signal, snr, marker="o", linestyle="-", color=color)
+    plt.plot(signal, snr, marker="o", linestyle="-")
     plt.xlabel("Signal (DN)")
     plt.ylabel("SNR")
     plt.title("SNR vs Signal")
@@ -48,13 +33,18 @@ def plot_snr_vs_signal(signal: np.ndarray, snr: np.ndarray, cfg: Dict, output_pa
     plt.close()
 
 
-def plot_snr_vs_exposure(exposure: np.ndarray, snr: np.ndarray, cfg: Dict, output_path: Path) -> None:
-    """Plot SNR–Exposure curve and save to *output_path*."""
-    labels = cfg.get("plot", {}).get("exposure_labels", list(map(str, exposure)))
+def plot_snr_vs_exposure(exposure_ratios: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any], output_path: Path):
+    """Plot SNR–Exposure curve with labels from cfg.plot.exposures or auto."""
+    plot_cfg = cfg.get("plot", {})
+    labels = plot_cfg.get("exposures")
+    if labels is None:
+        # derive order from measurement.exposures nested‑dict (descending ratio)
+        labels = [ratio for ratio, _ in cfgutil.exposure_entries(cfg)]
+    label_strs = _auto_labels(labels)
+
     plt.figure()
-    color = _maybe_color(0, cfg)
-    plt.plot(exposure, snr, marker="s", linestyle="-", color=color)
-    plt.xticks(exposure, labels)
+    plt.plot(exposure_ratios, snr, marker="s", linestyle="-")
+    plt.xticks(exposure_ratios, label_strs, rotation=45)
     plt.xlabel("Exposure Ratio")
     plt.ylabel("SNR")
     plt.title("SNR vs Exposure")

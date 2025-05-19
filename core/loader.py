@@ -1,61 +1,60 @@
-# core/loader.py – config-aware implementation
+# core/loader.py – Spec‑compliant loader (nested‑dict gains/exposures)
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import tifffile
 import numpy as np
 
 __all__ = [
-    "load_image_stack",
     "find_condition_folders",
+    "load_image_stack",
 ]
 
 # -----------------------------------------------------------------------------
-# Helper utilities
+# Helpers
 # -----------------------------------------------------------------------------
 
-def _collect_files(folder: Path, cfg: Dict) -> List[Path]:
-    """Return ordered list of image paths based on config rules."""
-    image_cfg = cfg.get("image_structure", {})
-    ext = image_cfg.get("file_extension", ".tiff")
-    rule = image_cfg.get("file_naming_rule")
-
-    if rule:
-        files: List[Path] = []
-        idx = 0
-        while True:
-            candidate = folder / (rule % idx)
-            if candidate.exists():
-                files.append(candidate)
-                idx += 1
-            else:
-                break
-        if not files:
-            raise FileNotFoundError(f"No files matched naming rule '{rule}' in {folder}")
-    else:
-        files = sorted(folder.glob(f"*{ext}"))
-        if not files:
-            raise FileNotFoundError(f"No '*{ext}' files found in {folder}")
-    return files
+def _collect_frames(folder: Path) -> List[Path]:
+    """Return sorted list of *.tiff files in *folder*."""
+    return sorted(p for p in folder.iterdir() if p.suffix.lower() == ".tiff")
 
 
 # -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
 
-def load_image_stack(folder: Path | str, cfg: Dict) -> np.ndarray:
-    """Load stack of 16‑bit images according to config rules."""
+def find_condition_folders(project_dir: Path | str, cfg: Dict) -> List[Tuple[Path, float, float]]:
+    """Discover leaf folders <gain>/<exposure> present on disk.
+
+    Returns list[ (folder_path, gain_db, exposure_ratio) ].
+    """
+    project_dir = Path(project_dir)
+
+    gains_cfg = cfg["measurement"]["gains"]      # dict: db -> {folder: ..}
+    exposures_cfg = cfg["measurement"]["exposures"]  # dict: ratio -> {folder: ..}
+
+    folders: List[Tuple[Path, float, float]] = []
+    for gain_db_str, g_meta in gains_cfg.items():
+        gain_db = float(gain_db_str)
+        gain_folder = project_dir / g_meta["folder"]
+        if not gain_folder.is_dir():
+            continue  # skip missing gain dir
+        for ratio_str, e_meta in exposures_cfg.items():
+            ratio = float(ratio_str)
+            exp_folder = gain_folder / e_meta["folder"]
+            if exp_folder.is_dir() and any(exp_folder.iterdir()):
+                folders.append((exp_folder, gain_db, ratio))
+    return folders
+
+
+def load_image_stack(folder: Path | str) -> np.ndarray:
+    """Load all TIFF frames in *folder* and return as (N,H,W) uint16 array."""
     folder = Path(folder)
-    files = _collect_files(folder, cfg)
-    stack = [tifffile.imread(str(p)) for p in files]
+    files = _collect_frames(folder)
+    if not files:
+        raise FileNotFoundError(f"No TIFF files in {folder}")
+    stack = [tifffile.imread(str(f)) for f in files]
     return np.stack(stack, axis=0)
-
-
-def find_condition_folders(root_dir: Path | str, cfg: Dict) -> List[Path]:
-    """Find leaf folders that contain at least one image file."""
-    root_dir = Path(root_dir)
-    ext = cfg.get("image_structure", {}).get("file_extension", ".tiff")
-    return [f for f in root_dir.rglob("*") if f.is_dir() and any(p.suffix == ext for p in f.iterdir() if p.is_file())]
