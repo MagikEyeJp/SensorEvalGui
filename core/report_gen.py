@@ -1,68 +1,94 @@
-# core/report_gen.py
+# core/report_gen.py – config-aware implementation
+
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict
-import json
 import base64
+import json
+
+__all__ = [
+    "save_summary_txt",
+    "save_stats_csv",
+    "generate_html_report",
+]
+
+# -----------------------------------------------------------------------------
+# Helper
+# -----------------------------------------------------------------------------
+
+def _write_if_enabled(flag: bool, path: Path, writer) -> None:
+    """Call *writer* if flag True."""
+    if flag:
+        writer(path)
 
 
-def save_summary_txt(stats: Dict[str, float], output_path: Path) -> None:
-    """
-    Save sensor evaluation summary to a plain text file.
-    """
-    with open(output_path, 'w') as f:
-        for key, val in stats.items():
-            f.write(f"{key}: {val:.3f}\n")
+def _embed_b64(img_path: Path) -> str:
+    with img_path.open("rb") as fh:
+        return base64.b64encode(fh.read()).decode()
+
+# -----------------------------------------------------------------------------
+# Public API
+# -----------------------------------------------------------------------------
+
+def save_summary_txt(stats: Dict[str, float], cfg: Dict, path: Path) -> None:
+    _write_if_enabled(
+        cfg.get("output", {}).get("generate_summary_txt", True),
+        path,
+        lambda p: p.write_text("\n".join(f"{k}: {v:.3f}" for k, v in stats.items()), encoding="utf-8"),
+    )
 
 
-def save_stats_csv(stats_list: list[Dict], output_path: Path) -> None:
-    """
-    Save a list of stats (dict per ROI or condition) to CSV.
-    """
+def save_stats_csv(stats_list: list[Dict], cfg: Dict, path: Path) -> None:
     import csv
+
+    if not cfg.get("output", {}).get("generate_csv", True):
+        return
     if not stats_list:
         return
 
     keys = stats_list[0].keys()
-    with open(output_path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=keys)
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=keys)
         writer.writeheader()
         writer.writerows(stats_list)
 
 
-def embed_image_as_base64(path: Path) -> str:
-    """
-    Convert image to base64 for HTML embedding.
-    """
-    with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode('utf-8')
+def generate_html_report(summary: Dict[str, float], graph_paths: Dict[str, Path], cfg: Dict, path: Path) -> None:
+    if not cfg.get("output", {}).get("generate_html_report", True):
+        return
 
+    order = cfg.get("output", {}).get(
+        "report_order",
+        [
+            "Dynamic Range (dB)",
+            "SNR (max)",
+            "Read Noise",
+            "DN @ 20 dB",
+            "PRNU (%)",
+        ],
+    )
 
-def generate_html_report(summary: Dict[str, float], graph_paths: Dict[str, Path], output_path: Path) -> None:
-    """
-    Generate an HTML report embedding key graphs and summary metrics.
-    """
-    snr_sig_b64 = embed_image_as_base64(graph_paths["snr_signal"])
-    snr_exp_b64 = embed_image_as_base64(graph_paths["snr_exposure"])
+    summary_html = "".join(
+        f"<tr><td>{k}</td><td>{summary.get(k, '—')}</td></tr>" for k in order
+    )
 
     html = f"""
-    <html><head><title>Sensor Evaluation Report</title></head><body>
+    <html><head><meta charset='utf-8'><title>Sensor Evaluation Report</title></head><body>
     <h1>Sensor Evaluation Summary</h1>
-    <ul>
-    {''.join(f'<li>{k}: {v:.3f}</li>' for k, v in summary.items())}
-    </ul>
+    <table border='1' cellpadding='4'>
+    {summary_html}
+    </table>
     <h2>SNR vs Signal</h2>
-    <img src="data:image/png;base64,{snr_sig_b64}" width="600"/>
+    <img src='data:image/png;base64,{_embed_b64(graph_paths["snr_signal"]) }' width='600'/>
     <h2>SNR vs Exposure</h2>
-    <img src="data:image/png;base64,{snr_exp_b64}" width="600"/>
+    <img src='data:image/png;base64,{_embed_b64(graph_paths["snr_exposure"]) }' width='600'/>
     </body></html>
     """
-    output_path.write_text(html)
+    path.write_text(html, encoding="utf-8")
 
 
-def save_json_config(config: dict, path: Path) -> None:
-    """
-    Optional helper to save config for debugging.
-    """
-    with open(path, 'w') as f:
-        json.dump(config, f, indent=2)
+def save_config_snapshot(cfg: Dict, path: Path) -> None:
+    """Optional helper for debugging."""
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(cfg, fh, indent=2)
