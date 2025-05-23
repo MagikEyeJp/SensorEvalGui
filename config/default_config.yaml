@@ -1,63 +1,68 @@
-# Sensor Evaluation – default_config.yaml (Spec-complete)
-# *Sensor Output Spec* に準拠したデフォルト設定。プロジェクト固有の値は適宜書き換えてください。
+# generated: 2025-05-18T12:05:00Z (auto)
+# Default configuration (Spec-complete, with inline comments)
 
 sensor:
-  name: Sony IMX273
-  adc_bits: 10          # ADC 分解能 [bit]
-  lsb_shift: 6          # デジタル LSB 右シフト量
+  name: Sony IMX273                # Sensor model name
+  adc_bits: 10                     # ADC bit depth
+  lsb_shift: 6                     # Bit shift applied before saving
 
 environment:
   note: |
-    LED : 940 nm CW
-    Lens: LH2601A (IR-pass)
-    Temp: 25 °C
+    LED : 940 nm CW
+    Lens: LH2601A (IR‑pass)
+    Temp: 25 °C
 
 measurement:
-  gains:                # {folder: フォルダ名, db: ゲイン[dB]}
-    - { folder: gain_0dB,   db: 0 }
-    - { folder: gain_6dB,   db: 6 }
-    - { folder: gain_12dB,  db: 12 }
-  exposures:            # {folder: サブフォルダ名, ratio: 露光倍率}
-    - { folder: chart_x4,    ratio: 4.0   }
-    - { folder: chart_x2,    ratio: 2.0   }
-    - { folder: chart_x1,    ratio: 1.0   }
-    - { folder: chart_x0.5,  ratio: 0.5   }
-    - { folder: chart_x0.25, ratio: 0.25  }
+  gains:                           # dB → sub‑folder
+    0:   { folder: gain_0dB }
+    6:   { folder: gain_6dB }
+    12:  { folder: gain_12dB }
+    24:  { folder: gain_24dB }
+  exposures:                       # ratio → sub‑folder
+    4.0:    { folder: chart_x4 }
+    2.0:    { folder: chart_x2 }
+    1.0:    { folder: chart_x1 }
+    0.5:    { folder: chart_x0.5 }
+    0.25:   { folder: chart_x0.25 }
+    0.125:  { folder: chart_x0.125 }
+    0.0625: { folder: chart_x0.0625 }
+  flat_lens_folder: LensFlat       # Flat field with lens
+  flat_nolens_folder: flat         # Flat field without lens
+  dark_folder: dark                # Dark stacks
+  flat_roi_file:  roi/flat.roi     # ROI for flat correction
+  chart_roi_file: roi/chart_roi.zip# ROI ZIP for gray chart
+  roi_mid_index: 5                 # Mid‑tone patch index 0–10
 
 illumination:
-  power_uW_cm2: 67.92            # 入射光パワー
-  exposure_ms: 960               # 基準露光時間 [ms]
-  flat_lens_folder: LensFlat
-  flat_nolens_folder: flat
-  dark_folder: dark
-  sat_factor: 0.95               # 飽和検出しきい値 (percentage)
-  roi_mid_index: 5               # Graychart 中間階調 (0–10)
+  power_uW_cm2: 67.92              # Incident power
+  exposure_ms: 960                 # Base exposure time
+  sat_factor: 0.95                 # Saturation threshold (0–1)
 
 processing:
-  roi_default: [100, 100, 200, 200]   # (x, y, w, h)
-  roi_zip_file: roi/chart_roi.zip      # ROI ZIP
-  mask_upper_margin: 0.85        # 飽和マスク閾値 (DN_sat × 0.85)
-  stat_mode: rms                 # rms / mean / mad
-  snr_threshold_dB: 10           # 視認限界 SNR
-  min_sig_factor: 3              # σ_read の n倍以上を有効信号
-  apply_gain_map: false          # ゲインマップ補正
-  plane_fit_order: 2             # 傾斜補正次数
-  read_noise_mode: 0             # 0: std、1: 差分法
-  prnu_fit: LS                   # LS or WLS
+  roi_zip_file: roi/chart_roi.zip  # Default ROI ZIP
+  stat_mode: rms                   # rms | mean | median
+  snr_threshold_dB: 10             # SNR threshold for DR
+  min_sig_factor: 3                # Guard: mean ≥ N×σ
+  apply_gain_map: false
+  plane_fit_order: 2
+  read_noise_mode: 0
+  prnu_fit: LS
+  exclude_abnormal_snr: true
 
 plot:
-  color_by_exposure: false
-  exposure_labels: [1x, 0.25x, 0.5x, 1x, 2x, 4x]
+  # exposures: [4.0,2.0,1.0,0.5,0.25,0.125,0.0625]  # Override order if needed
+  color_by_exposure: false         # Optional UI key
+  exposure_labels: [4×,2×,1×,0.5×,0.25×,0.125×,0.0625×]
 
 output:
   output_dir: output
-  report_html: true              # HTML レポート出力
-  report_csv: true               # CSV 出力
-  debug_stacks: false            # デバッグ用スタック保存
+  report_html: true
+  report_csv: true
+  report_summary: true
+  debug_stacks: false
   report_order:
     - Dynamic Range (dB)
     - SNR (max)
     - Read Noise
     - DN @ 20 dB
     - PRNU (%)
-

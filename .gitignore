@@ -23,3 +23,6 @@ build/
 *.swp
 .DS_Store
 set_env_vars.sh
+
+project/
+venv

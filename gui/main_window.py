@@ -1,130 +1,117 @@
-# gui/main_window.py – config‑aware implementation
+# generated: 2025-05-18T11:35:00Z (auto)
+# gui/main_window.py – PySide6 GUI (Spec‑aligned, full analysis pipeline)
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict, Any
 
+import numpy as np
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
     QFileDialog,
     QPushButton,
     QLabel,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
     QMessageBox,
 )
 
-from utils.config import load_config
-from core.loader import load_image_stack
-from core.analysis import extract_roi_stats
+from utils.config import load_config, exposure_entries, gain_entries
+from core.analysis import extract_roi_stats, calculate_dynamic_range, calculate_snr_curve
 from core.plotting import plot_snr_vs_signal, plot_snr_vs_exposure
-from core.report_gen import save_summary_txt, generate_html_report
-
-import numpy as np
+from core.report_gen import save_summary_txt, report_csv, report_html
 
 
 class MainWindow(QMainWindow):
-    """Main GUI window for Sensor Evaluation."""
-
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__()
         self.setWindowTitle("Sensor Evaluation GUI")
-
-        # ── runtime state ────────────────────────────────────────────────
         self.project_dir: Path | None = None
-        self.config: Dict[str, Any] = {}
+        self.config: Dict[str, Any] | None = None
+        self._setup_ui()
 
-        # ── widgets ─────────────────────────────────────────────────────
-        self.folder_label = QLabel("No project selected")
-        self.output_display = QTextEdit()
-        self.output_display.setReadOnly(True)
+    # ──────────────────────────────────────────── UI setup
+    def _setup_ui(self):
+        sel_btn = QPushButton("Select Project Folder")
+        sel_btn.clicked.connect(self.select_project)
+        run_btn = QPushButton("RUN")
+        run_btn.clicked.connect(self.run_analysis)
+        self.status = QLabel("Ready")
 
-        self.select_button = QPushButton("Select Project Folder")
-        self.select_button.clicked.connect(self.select_project)
+        lay = QVBoxLayout(); lay.addWidget(sel_btn); lay.addWidget(run_btn); lay.addWidget(self.status)
+        container = QWidget(); container.setLayout(lay); self.setCentralWidget(container)
 
-        self.run_button = QPushButton("RUN (re‑evaluate)")
-        self.run_button.clicked.connect(self.run_evaluation)
-        self.run_button.setEnabled(False)
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.folder_label)
-        layout.addWidget(self.select_button)
-        layout.addWidget(self.run_button)
-        layout.addWidget(self.output_display)
-
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
-
-    # ╭──────────────── callbacks ─────────────────╮
-
-    def select_project(self) -> None:
-        """User chooses project folder → load config → auto‑run."""
-        folder = QFileDialog.getExistingDirectory(self, "Select Project Folder")
-        if not folder:
+    # ──────────────────────────────────────────── Slots
+    def select_project(self):
+        dir_path = QFileDialog.getExistingDirectory(self, "Select Project Folder")
+        if not dir_path:
             return
-
-        self.project_dir = Path(folder).resolve()
-        self.folder_label.setText(str(self.project_dir))
-
-        # Load config.yaml (fallback to repo default)
-        try:
-            self.config = load_config(self.project_dir)
-        except Exception as exc:  # pragma: no cover
-            QMessageBox.critical(self, "Config Error", str(exc))
+        self.project_dir = Path(dir_path)
+        cfg_path = self.project_dir / "config.yaml"
+        if not cfg_path.is_file():
+            QMessageBox.critical(self, "Error", "config.yaml not found in project folder")
             return
+        self.config = load_config(cfg_path)
+        self.status.setText(f"Project loaded: {self.project_dir}")
 
-        self.run_button.setEnabled(True)
-        self.run_evaluation()
-
-    def run_evaluation(self) -> None:
-        """Run full evaluation pipeline on current project."""
-        if self.project_dir is None:
-            QMessageBox.warning(self, "No project", "Please select a project folder first.")
+    def run_analysis(self):
+        if self.project_dir is None or self.config is None:
+            QMessageBox.warning(self, "No Project", "Select a project folder first.")
             return
+        # try:
+        self._run_pipeline()
+        self.status.setText("Done ✅")
+        # except Exception as e:
+        #     QMessageBox.critical(self, "Error", str(e))
 
-        try:
-            # 1. Load image stack(s)
-            img_root = self.project_dir / self.config["image_structure"]["graychart_dir"]
-            stack = load_image_stack(img_root, self.config)
+    # ──────────────────────────────────────────── Core pipeline
+    def _run_pipeline(self):
+        cfg = self.config; project = self.project_dir
 
-            # 2. Analysis
-            stats = extract_roi_stats(stack, self.config)
+        # 1. ROI‑based statistics
+        stats = extract_roi_stats(project, cfg)  # {(gain, ratio): {mean,std,snr}}
+        if not stats:
+            raise RuntimeError("No valid stacks found for analysis")
 
-            # 3. Dummy plotting (replace with real data later)
-            signal = np.linspace(100, 10000, 11)
-            snr = signal / np.sqrt(signal)
+        # Flatten dict to lists keeping consistent order (ascending signal)
+        tuples = sorted(stats.items(), key=lambda kv: kv[1]["mean"])
+        signals = np.array([kv[1]["mean"] for kv in tuples])
+        noises  = np.array([kv[1]["std"]  for kv in tuples])
+        snr_lin = signals / noises
+        snr_db  = 20.0 * np.log10(snr_lin, where=noises!=0)
+        ratios  = np.array([kv[0][1] for kv in tuples])
 
-            output_dir = self.project_dir / self.config["output"]["output_dir"]
-            output_dir.mkdir(exist_ok=True)
+        # 2. Summary metrics
+        dyn_range = calculate_dynamic_range(snr_lin, signals, cfg)
+        summary = {"Dynamic Range (dB)": dyn_range}
 
-            sig_png = output_dir / "snr_signal.png"
-            exp_png = output_dir / "snr_exposure.png"
+        # 3. Output dir
+        out_dir = project / cfg["output"].get("output_dir", "output")
+        out_dir.mkdir(exist_ok=True)
 
-            plot_snr_vs_signal(signal, snr, self.config, sig_png)
-            plot_snr_vs_exposure(np.array(self.config["exposure_ratios"]), snr, self.config, exp_png)
+        # 4. Save CSV & summary
+        stats_rows = [
+            {"gain_db": kv[0][0], "ratio": kv[0][1], **kv[1]} for kv in tuples
+        ]
+        report_csv(stats_rows, cfg, out_dir / "stats.csv")
+        save_summary_txt(summary, cfg, out_dir / "summary.txt")
 
-            if self.config["output"].get("generate_summary_txt", True):
-                save_summary_txt(stats, output_dir / "summary.txt")
-            if self.config["output"].get("generate_html_report", True):
-                generate_html_report(stats, {"snr_signal": sig_png, "snr_exposure": exp_png}, output_dir / "report.html")
+        # 5. Plots
+        plot_snr_vs_signal(signals, snr_lin, cfg, out_dir / "snr_signal.png")
+        plot_snr_vs_exposure(ratios, snr_lin, cfg, out_dir / "snr_exposure.png")
 
-            self.output_display.setPlainText(f"Evaluation complete → {output_dir}")
+        # 6. HTML report
+        graphs = {
+            "snr_signal": out_dir / "snr_signal.png",
+            "snr_exposure": out_dir / "snr_exposure.png",
+        }
+        report_html(summary, graphs, cfg, out_dir / "report.html")
 
-        except Exception as exc:  # pragma: no cover
-            self.output_display.setPlainText(f"Error: {exc}")
 
-
-# ── entrypoint ─────────────────────────────────────────────────────────
-
+# ──────────────────────────────────────────── Entrypoint
 if __name__ == "__main__":
-    import sys
-
     app = QApplication(sys.argv)
-    win = MainWindow()
-    win.resize(800, 600)
-    win.show()
-    sys.exit(app.exec())
+    win = MainWindow(); win.show(); sys.exit(app.exec())
