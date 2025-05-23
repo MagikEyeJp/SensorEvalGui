@@ -2,15 +2,14 @@
 numpy>=1.25,<2.0
 matplotlib>=3.8,<4.0
 tifffile>=2023.7
+imagecodecs>=2023.7
+roifile>=2023.9          # ← ROI ZIP / ImageJ .roi reader
 
 # GUI
-PySide6>=6.6,<6.7          # Qt6 GUI framework used by gui/main_window.py
-# もし PySide6 が環境に入らない場合は PyQt6>=6.6,<6.7 でも動作しますが、
-# requirements.txt にはどちらか一方のみ記載してください。
+PySide6>=6.6,<6.7        # or swap for PyQt6 if preferred
 
 # YAML handling
 PyYAML>=6.0
 
-# (任意) レポート生成やテストに便利
-Pillow>=10.0                # matplotlib が内部で画像読み込みに利用
-pytest>=8.0                 # ユニットテスト用
+# Development / tests
+pytest>=8.0              # optional, unit tests
