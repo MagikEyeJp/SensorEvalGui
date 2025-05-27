@@ -5,9 +5,11 @@ import logging
 
 from gui.main_window import MainWindow
 from utils.logger import setup_logging
+import faulthandler
 
 
 def main() -> None:
+    faulthandler.enable()
     setup_logging()
     logging.info("Application started")
     app = QApplication(sys.argv)
