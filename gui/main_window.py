@@ -272,6 +272,7 @@ class MainWindow(QMainWindow):
             return
         if self.worker is not None:
             return
+        self.run_btn.setEnabled(False)
         self.sel_btn.setEnabled(False)
         self.summary_view.clear()
         self.graph_tabs.clear()
@@ -290,6 +291,7 @@ class MainWindow(QMainWindow):
         self.status.setText("Done ✅")
         self.progress.setValue(100)
         self.worker = None
+        self.run_btn.setEnabled(True)
         self.sel_btn.setEnabled(True)
 
         if self.project_dir is None or self.config is None:
