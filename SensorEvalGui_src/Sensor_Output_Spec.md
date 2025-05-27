@@ -1,8 +1,6 @@
-# センサ評価プログラム仕様（2025年版・暫定）
+jk## センサ評価レポート出力項目仕様（2025年版・暫定）
 
-## 入力項目仕様
-
-### 📝 設定、センサ共通メタ情報(config.yaml)
+### 📝 センサ共通メタ情報
 
 * Sensor Name（型番やID）
 * 使用レンズ（任意）
@@ -10,37 +8,32 @@
 * ゲインリスト：\[0dB, 6dB, 12dB, 24dB] # <- 6dBおきに取った方望ましいため18dBも追加
 * 露光倍率リスト：\[1/16, 1/8, 1/4, 1/2, 1, 2, 4]
 * 各条件における画像枚数（例：10）
-* 各種設定 (後述)
 
-### 📝 画像データ
-Gainごとに下記画像セットを入力とする。それぞれ10枚以上。Gainと露出倍率の組み合わせはconfig.yamlにて定義(後述)
-* フラット画像: レンズ付きフラット画像(露出:フルスケール95%など)
-* ダーク画像: 完全遮光画像
-* グレースケール画像:  11階調グレースケールチャート。レンズ付きフラット画像を撮った時の露光時間をx1倍とし、各種倍率の画像を用意
-* フラット/ダーク画像: ROIファイル(ImageJ形式 .zip/.roi)
-* グレースケール画像: ROIファイル(ImageJ形式 .zip), 階調数分のROIがある
-
-
-## 出力項目仕様
+## ※ `graychart_snr.png` は補助的可視化として残しているが、グレーチャートROIを `snr_signal.png` に統合することで一本化可能。
 
 ### 📄 出力ファイル一覧（センサごと）
+
+※ この一覧は現在の実装・評価仕様に対応しているようですが、必要なファイルや処理がすべてここに網羅されているか最終確認を検討してもよいかもしれません。
 
 ※ 各指標の算出方法と関連config項目は以下に明記します
 
 ※ 各指標の算出方法は以下に明記します（関連configキー対応）
 
-#### 1. `summary.txt'
-センサ共通メタ情報、測定条件、およびGainごとにGUIおよびテキストファイルとして出力
+#### 1. `sensor_summary.csv`
 
-* **System Sensitivity (DN / μW·cm⁻²·s)**：フラット画像(各露光条件) のフラットROIの平均DNを、照度 power_uW_cm2（μW/cm²）×露光時間 exposure_ms（ms）で割って計算する。
-※ conversion gainが不明のため、DN感度 `System Sensitivity (DN / μW·cm²·s)` を出力し、レンズ込みの実効感度とする。
+※ `Sensitivity (e⁻/μW·cm²·s)` は conversion gain（e⁻/DN）が未定のため出力対象外とする。 代替として `System Sensitivity (DN / μW·cm²·s)` を出力し、レンズ込みの実効感度とする。
+
+* **System Sensitivity (DN / μW·cm⁻²·s)**：Gain 0dB・Exp95% 時のフラット画像ROIの平均DNを、照度（μW/cm²）×露光時間（秒）で割って算出。
+
+  * conversion gain が不明なため DN 単位の感度として扱う。
+  * レンズによる透過率や光学減衰も含めた「システム実効感度」となる。
   * 使用項目：
-    * power_uW_cm2 フラット画像のパワーメータ測定値
-    * exposure_ms フラット画像の露出時間
-    * フラット画像ROI平均DN
-  * ※ 感度算出には DN\_sat は使用せず、Exp95%(sat_factorにて指定)で取得したフラット画像のフラットROIの平均値を用いる。DN\_sat 近傍は非線形性やノイズが増大するため不適。
 
-* **Pseudo PRNU (%)**：フラット画像（各露光条件）において、フラットROI内の各画素について時間方向（10枚）の標準偏差（σ）を算出し、それを空間方向に統計化（config.processing.stat\_mode に従い rms/mean/mad）する。さらに、ROI平均信号値で割って百分率表示（σ/μ × 100 \[%]）。
+    * illumination.power\_uW\_cm2
+    * reference.exposure\_ms
+    * フラット画像（gain\_0dB/chart\_1x）ROI平均DN
+  * ※ 感度算出には DN\_sat は使用せず、Exp95%画像の平均値を用いる。DN\_sat 近傍は非線形性やノイズが増大するため不適。
+* **Pseudo PRNU (%)**：フラット画像（各露光条件）において、ROI内の各画素について時間方向（10枚）の標準偏差（σ）を算出し、それを空間方向に統計化（config.processing.stat\_mode に従い rms/mean/mad）する。さらに、ROI平均信号値で割って百分率表示（σ/μ × 100 \[%]）。
 
   * ゲイン補正の有無：config.processing.apply\_gain\_map
   * フィッティング法：config.processing.prnu\_fit（"LS" or "WLS"）※ μ-σ回帰を行う場合に適用
@@ -51,82 +44,60 @@ Gainごとに下記画像セットを入力とする。それぞれ10枚以上�
 
   * 使用モード：config.processing.read\_noise\_mode
   * 差分法との切替（将来対応）：config.processing.read\_noise\_mode == 2 などで分岐予定
+* **Dynamic Range (dB)**：最大信号値として DN\_sat を用い、Read Noise (DN) との比から 20\*log10(DN\_sat / Noise) を算出。
+
+  * DN\_satの基準：config.reference.sat\_factor
 * **DN\_sat (飽和DN)**：以下3方式の最大を採用：
 
   1. フラット画像スタックの 99.9 パーセンタイル値
   2. 最大DN値 / config.reference.sat\_factor
   3. ADC最大値 × 0.90（将来config化）
-* **Dynamic Range (dB)**：最大信号値として DN\_sat を用い、Read Noise (DN) との比から 20\*log10(DN\_sat / Noise) を算出。
-* **SNR @ 50%**：グレースケールチャートまたはフラット画像で、Full-Wellの50%（例：32768 DN）に最も近いμとSNRの系列から、補間または回帰により推定して算出。
-  * DN\_satの基準：config.reference.sat\_factor
+* **SNR @ 50%**：グレーチャートまたはフラット画像で、Full-Wellの50%（例：32768 DN）に最も近いμとSNRの系列から、補間または回帰により推定して算出。
 * **DN @ SNR=10dB**：SNRカーブから、SNRが10dB（config.processing.snr\_threshold\_dB）を超える最小DN値を補間または回帰で推定。
 * **DN @ SNR=1 (0 dB)**：SNRが1となる最小信号レベル（ノイズと等価）を補間または回帰で推定。
 
 #### 2. `roi_stats.csv`
 
-各露光条件での統計値をcsvとして出力
-| ROI Type| ROI No. |Gain (dB)| Exposure | Mean  | Std  | SNR (dB)| 
-| --------|---------|---------|----------|-------|------|---------|
-| dark    | -       |  0      | x1       | 32.3  | 15.9 | –       |
-| flat    | -       |  0      | x1       |65300.1| 932  | 35.7    |
-| grayscale| 0      |  0      | x1       | 205.9 | 68.3 |  5.6    |
-| grayscale| 1      |  0      | x1       | 312.5 | 78.3 | 10.2    |
-| grayscale| 2      | 0       | x1       | 455.2 | 88.3 | 15.3    |
-
----
-### GUIレイアウト
-```
-GUIコンポーネント配置について
-[Select Project Folderボタン][RUNボタン]
-進捗ステータス行
---------- プログレスバー ----------------
----------------------------------------
-| Summary.txt表示エリア                 |
-| 必要に応じてスクロールバーあり           |
-|                                     |
----------------------------------------  
--[タブ切り替え]--------------------------  <-ここの境界は上下にドラッグ可能
-| グラフ表示エリア                       |
-| 項目ごとにタブでページ切り替え           |
-| 必要に応じてスクロールバーあり           |
-|                                     |
----------------------------------------  
-
-```
-
+| ROI Type Gain (dB) Exposure Level Mean Std SNR (dB) Type |    |    |   |      |      |      |      |
+| -------------------------------------------------------- | -- | -- | - | ---- | ---- | ---- | ---- |
+| flat                                                     | 0  | x1 | – | 932  | 15.3 | 35.7 | Flat |
+| gray                                                     | 12 | x1 | 2 | 68.3 | 10.1 | 13.6 | Gray |
+| dark                                                     | 0  | x1 | – | 2.9  | 1.1  | –    | Dark |
 
 ---
 
 ### 📊 グラフ・可視化
-GUI上、および出力画像として出力
 
 * `snr_signal.png`：SNR vs Mean Signal（log-log軸）
+
   * 横軸：ROI平均信号（DN）
   * 対象：Flat画像と Graychart画像の両方のROIを使用してμ-SNR系列を構成
   * 縦軸：SNR（dB）
   * 系列：露光倍率で色分け、ゲインで重ね描き
   * 補助線：理想曲線（√μ）、SNR=10dBライン
-
 * `snr_exposure.png`：SNR vs Exposure Time（中間階調）
-  * 横軸：露光時間（ms）。Graychart画像の他階調ROIも、中央階調に対するμの比から「擬似露光倍率」として換算し、クラウド状にマッピング可能。
-  * 縦軸：SNR（dB）
-  * 対象：グレースケール ROIの中央階調（config.reference.roi\_mid\_index）
-  * 系列：ゲインごとに色分け
 
+  * 横軸：露光時間（ms）。Graychart画像の他階調ROIも、中間階調に対するμの比から「擬似露光倍率」として換算し、クラウド状にマッピング可能。
+  * 縦軸：SNR（dB）
+  * 対象：gray ROIの中央階調（config.reference.roi\_mid\_index）
+  * 系列：ゲインごとに色分け
+* `graychart_snr.png`：※将来的に `snr_signal.png` に統合可能（下記注釈参照）
 * `prnu_fit.png`：μまたはμ² に対する標準偏差の回帰グラフ
+
   * 横軸：平均輝度（μ または μ²）
   * 縦軸：標準偏差 σ または σ²
   * 系列：ゲインごとに色分け（露光倍率も含めた全条件を使用）
   * 回帰法：OLS または WLS（config.processing.prnu\_fit）
-
 * `dsnu_map.png`：DSNU（遮光画像の画素間オフセット）マップ
+
   * 表示：ROI領域の空間分布
   * カラーマップ：ヒートマップ（logスケール／標準化あり）
 * `prnu_residual_map.png`：ゲイン補正後の固定パターンノイズ（空間ばらつき）
+
   * 表示：Flat画像スタックの残差の空間分布（std or RMS）
   * 補正前後で比較可能にしてもよい
-
 * `readnoise_map.png`：読み出しノイズの空間分布（Dark画像差分）
+
   * 表示：ROI内での時間方向標準偏差（各画素ごと）
   * 合成方法：10枚からのstd、または差分法
   * カラーマップ：ヒートマップ
@@ -135,8 +106,15 @@ GUI上、および出力画像として出力
 
 ### 🧾 HTMLレポート構成（`report.html`）
 
-出力ファイルの内容を全て網羅する
-※ 画像PNGは base64 埋め込みに対応
+1. Summary 表
+2. SNR vs Signal グラフ
+3. SNR vs Exposure グラフ
+4. Graychart 可視階調分析　　　　　#-> 削除(以降の番号ずれる)
+5. 残差ノイズ傾向（pseudo PRNU）
+6. Noise Maps（DSNU / Residual / ReadNoise）
+7. 備考・注釈
+
+※ PNGは base64 埋め込みに対応
 
 ---
 
@@ -145,7 +123,7 @@ GUI上、および出力画像として出力
 ## 📂 config.yaml の配置ルールと GUI フロー
 
 * **配置場所**: 評価対象 *project フォルダ* のトップレベルに `config.yaml` を置く。
-* **Select ボタン**: GUI で *project フォルダ* を選択すると、`config.yaml` を自動ロードし直ちに計算を実行(RUNボタンを押すのと等価)する。
+* **Select ボタン**: GUI で *project フォルダ* を選択すると、`config.yaml` を自動ロードし直ちに計算を実行する。
 * **RUN ボタン**: 設定を変更したり同じ project で再計算したい場合に手動でトリガーする。
 
 ```
@@ -173,7 +151,7 @@ measurement:
     1.0:    { folder: chart_x1 }
     0.5:    { folder: chart_x0.5 }
     0.25:   { folder: chart_x0.25 }
-    0.125: { folder: chart_x0.125 }
+    0.0125: { folder: chart_x0.125 }
     0.0625: { folder: chart_x0.0625 }
 
   flat_lens_folder: LensFlat
@@ -194,8 +172,9 @@ processing:
   snr_threshold_dB: 10       # SNR評価での可視限界（10dB など）
   min_sig_factor: 3           # σ_read の n倍以上を有効信号とみなす
   apply_gain_map : false      # PRNUの算出時gain_map補正をするか
-  prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
   plane_fit_order: 2          # ROI内傾斜補正次数
+  read_noise_mode: 0          # 差分法との切り替え
+  prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
 
 plot:
   exposures: [1.0, 0.0625]    # 図1に描画する露光倍率
@@ -249,6 +228,23 @@ project_IMX273/                ← ここを “プロジェクトフォルダ�
     └─ …
 
 ```
+
+|   |
+| - |
+
+---
+
+###
+
+###
+
+### 📥 入力前提
+
+* フラット画像: フラットチャート中央の均一領域（200x200px程度）
+* グレーチャート: 11階調チャート（階調別ROI）
+* ダーク画像: 完全遮光環境で撮影
+* 各露光倍率ごとに10枚（撮影済）
+* ROI指定はImageJ形式（.zip）
 
 ---
 
