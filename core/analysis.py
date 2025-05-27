@@ -215,12 +215,56 @@ def calculate_dynamic_range_dn(dn_sat: float, read_noise: float) -> float:
     return 20.0 * np.log10(dn_sat / read_noise)
 
 
-def calculate_pseudo_prnu(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> Tuple[float, np.ndarray]:
-    """Return (prnu_percent, residual_map)."""
+def calculate_pseudo_prnu(
+    flat_stack: np.ndarray,
+    cfg: Dict[str, Any],
+    rects: list[tuple[int, int, int, int]] | None = None,
+) -> Tuple[float, np.ndarray]:
+    """Return (pseudo_prnu_percent, residual_map) within ROI."""
+
+    mask = (
+        _mask_from_rects(flat_stack.shape[1:], rects)
+        if rects
+        else np.ones(flat_stack.shape[1:], bool)
+    )
+
     mean_frame = np.mean(flat_stack, axis=0)
-    std_frame = np.std(flat_stack, axis=0)
-    stat_mode = cfg["processing"].get("stat_mode", "rms")
-    value = _reduce(std_frame, stat_mode) / max(mean_frame.mean(), 1e-6) * 100.0
+
+    apply_gain = cfg.get("processing", {}).get("apply_gain_map", False)
+    order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
+
+    def _fit_gain(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
+        if order <= 0:
+            c = float(np.mean(frame[mask]))
+            return np.full_like(frame, c)
+        y, x = np.indices(frame.shape)
+        xm, ym = x[mask].ravel(), y[mask].ravel()
+        z = frame[mask].ravel()
+        cols = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols.append((xm ** i) * (ym ** j))
+        A = np.vstack(cols).T
+        coef, *_ = np.linalg.lstsq(A, z, rcond=None)
+        cols_full = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols_full.append((x ** i) * (y ** j))
+        A_full = np.stack(cols_full, axis=0)
+        fitted = np.tensordot(coef, A_full, axes=(0, 0))
+        return fitted
+
+    if apply_gain:
+        gain_map = _fit_gain(mean_frame, mask, order)
+        gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+        corrected = flat_stack / gain_map
+        mean_frame = np.mean(corrected, axis=0)
+        std_frame = np.std(corrected, axis=0)
+    else:
+        std_frame = np.std(flat_stack, axis=0)
+
+    stat_mode = cfg.get("processing", {}).get("stat_mode", "rms")
+    value = _reduce(std_frame[mask], stat_mode) / max(mean_frame[mask].mean(), 1e-6) * 100.0
     return value, std_frame
 
 
