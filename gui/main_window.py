@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QTabWidget,
     QSplitter,
+    QSizePolicy,
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import QThread, Signal, Qt
@@ -183,6 +184,7 @@ class MainWindow(QMainWindow):
         self.project_dir: Path | None = None
         self.config: Dict[str, Any] | None = None
         self.worker: EvalWorker | None = None
+        self.canvases: list[FigureCanvas] = []
         self._setup_ui()
 
     # ──────────────────────────────────────────── UI setup
@@ -208,10 +210,14 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(1, 3)
 
         btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.setSpacing(2)
         btn_row.addWidget(self.sel_btn)
         btn_row.addWidget(self.run_btn)
 
         lay = QVBoxLayout()
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(2)
         lay.addLayout(btn_row)
         lay.addWidget(self.status)
         lay.addWidget(self.progress)
@@ -245,6 +251,7 @@ class MainWindow(QMainWindow):
         self.sel_btn.setEnabled(False)
         self.summary_view.clear()
         self.graph_tabs.clear()
+        self.canvases.clear()
         self.status.setText("Running...")
         plt.switch_backend("Agg")
         self.worker = EvalWorker(self.project_dir, self.config)
@@ -293,16 +300,19 @@ class MainWindow(QMainWindow):
         self.resize(640, self.height())
         h = self.splitter.height()
         self.splitter.setSizes([int(h * 0.25), int(h * 0.75)])
+        self._refresh_canvas_geometry()
 
     def _create_canvas(self, png_path: Path) -> QWidget:
         """Return QWidget with interactive matplotlib canvas for the PNG."""
         plt.switch_backend("QtAgg")
         img = plt.imread(str(png_path))
-        fig = plt.figure()
+        fig = plt.figure(constrained_layout=True)
         ax = fig.add_subplot(111)
         ax.imshow(img)
         ax.set_axis_off()
         canvas = FigureCanvas(fig)
+        canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvases.append(canvas)
         toolbar = NavigationToolbar2QT(canvas, None)
         w = QWidget()
         layout = QVBoxLayout()
@@ -312,12 +322,30 @@ class MainWindow(QMainWindow):
         w.setLayout(layout)
         return w
 
+    def _refresh_canvas_geometry(self) -> None:
+        """Resize matplotlib figures to match their canvas widgets."""
+        for canvas in self.canvases:
+            dpi = canvas.figure.dpi
+            w = canvas.width() / dpi
+            h = canvas.height() / dpi
+            canvas.figure.set_size_inches(w, h, forward=True)
+            canvas.draw_idle()
+
     def _analysis_error(self, msg: str):
         QMessageBox.critical(self, "Error", msg)
         self.status.setText("Error")
         self.progress.setValue(0)
         self.worker = None
         self.sel_btn.setEnabled(True)
+
+    # ──────────────────────────────────────────── Events
+    def resizeEvent(self, event):  # pragma: no cover - GUI
+        super().resizeEvent(event)
+        self._refresh_canvas_geometry()
+
+    def showEvent(self, event):  # pragma: no cover - GUI
+        super().showEvent(event)
+        self._refresh_canvas_geometry()
 
 
 # ──────────────────────────────────────────── Entrypoint
