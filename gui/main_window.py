@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 import numpy as np
+import tifffile
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -25,10 +26,13 @@ from utils.config import load_config
 import utils.config as cfgutil
 from core.analysis import (
     extract_roi_stats,
+    extract_roi_table,
     calculate_dark_noise,
     calculate_dark_noise_gain,
     calculate_dn_sat,
     calculate_dynamic_range_dn,
+    calculate_system_sensitivity,
+    calculate_dn_at_snr,
     calculate_pseudo_prnu,
 )
 from core.plotting import (
@@ -72,27 +76,55 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
     snr_lin = signals / noises
     ratios = np.array([kv[0][1] for kv in tuples])
 
-    # 2. Dark/flat metrics per gain (first gain only for simplicity)
-    gain_db = cfgutil.gain_entries(cfg)[0][0]
-    dsnu, read_noise, dsnu_map, rn_map = calculate_dark_noise_gain(project, gain_db, cfg)
-    flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get("flat_lens_folder", "flat")
-    flat_stack = load_image_stack(flat_folder)
-    dn_sat = calculate_dn_sat(flat_stack, cfg)
-    prnu, prnu_map = calculate_pseudo_prnu(flat_stack, cfg)
+    roi_table = extract_roi_table(project, cfg)
 
-    dyn_range = calculate_dynamic_range_dn(dn_sat, read_noise)
+    # 2. Dark/flat metrics per gain (use first gain for maps)
+    debug_stacks = cfg["output"].get("debug_stacks", False)
 
     out_dir = project / cfg["output"].get("output_dir", "output")
     out_dir.mkdir(exist_ok=True)
 
-    stats_rows = [{"gain_db": kv[0][0], "ratio": kv[0][1], **kv[1]} for kv in tuples]
-    report_csv(stats_rows, cfg, out_dir / "stats.csv")
+    dsnu_list = []
+    rn_list = []
+    prnu_list = []
+    sens_list = []
+    first = True
+    for gain_db, _ in cfgutil.gain_entries(cfg):
+        dsnu, rn, dsnu_map_tmp, rn_map_tmp = calculate_dark_noise_gain(project, gain_db, cfg)
+        dsnu_list.append(dsnu)
+        rn_list.append(rn)
+        flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get("flat_lens_folder", "flat")
+        flat_stack = load_image_stack(flat_folder)
+        if debug_stacks and first:
+            dark_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get("dark_folder", "dark")
+            dark_stack = load_image_stack(dark_folder)
+            tifffile.imwrite(out_dir / f"dark_cache_{int(gain_db)}dB.tiff", dark_stack)
+            tifffile.imwrite(out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack)
+        prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg)
+        prnu_list.append(prnu)
+        sens_list.append(calculate_system_sensitivity(flat_stack, cfg))
+        if first:
+            dsnu_map, rn_map, prnu_map = dsnu_map_tmp, rn_map_tmp, prnu_map_tmp
+            dn_sat = calculate_dn_sat(flat_stack, cfg)
+            first = False
+
+    dsnu = float(np.mean(dsnu_list)) if dsnu_list else 0.0
+    read_noise = float(np.mean(rn_list)) if rn_list else 0.0
+    dyn_range = calculate_dynamic_range_dn(dn_sat, read_noise)
+    prnu = float(np.mean(prnu_list)) if prnu_list else float('nan')
+    system_sens = float(np.mean(sens_list)) if sens_list else float('nan')
+    dn_at_10 = calculate_dn_at_snr(signals, snr_lin, cfg["processing"].get("snr_threshold_dB", 10.0))
+
+    stats_rows = roi_table
+    report_csv(stats_rows, cfg, out_dir / "roi_stats.csv")
     summary = {
         "Dynamic Range (dB)": dyn_range,
         "DSNU (DN)": dsnu,
         "Read Noise (DN)": read_noise,
         "DN_sat": dn_sat,
         "PRNU (%)": prnu,
+        "System Sensitivity": system_sens,
+        "DN @ 10 dB": dn_at_10,
     }
     save_summary_txt(summary, cfg, out_dir / "summary.txt")
 
