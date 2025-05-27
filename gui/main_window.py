@@ -283,7 +283,7 @@ class MainWindow(QMainWindow):
         self.worker.finished.connect(self._analysis_done)
         self.worker.error.connect(self._analysis_error)
         self.worker.progress.connect(self.progress.setValue)
-        QThread.finished.connect(self.worker, self._worker_finished)
+        self.worker.finished.connect(self._worker_finished)
         self.progress.setValue(0)
         self.worker.start()
 
@@ -358,7 +358,7 @@ class MainWindow(QMainWindow):
             canvas.figure.set_size_inches(w, h, forward=True)
             canvas.draw_idle()
 
-    def _worker_finished(self) -> None:
+    def _worker_finished(self, *args) -> None:
         """Cleanup after worker thread finishes."""
         if self.worker is not None:
             self.worker.wait()
