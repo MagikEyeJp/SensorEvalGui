@@ -186,6 +186,7 @@ class MainWindow(QMainWindow):
         self.worker: EvalWorker | None = None
         self.canvases: list[FigureCanvas] = []
         self._setup_ui()
+        self.resize(640, 480)
 
     # ──────────────────────────────────────────── UI setup
     def _setup_ui(self):
@@ -322,8 +323,9 @@ class MainWindow(QMainWindow):
         """Resize matplotlib figures to match their canvas widgets."""
         for canvas in self.canvases:
             dpi = canvas.figure.dpi
-            w = canvas.width() / dpi
-            h = canvas.height() / dpi
+            scale = getattr(canvas, "devicePixelRatioF", lambda: 1.0)()
+            w = canvas.width() * scale / dpi
+            h = canvas.height() * scale / dpi
             canvas.figure.set_size_inches(w, h, forward=True)
             canvas.draw_idle()
 
