@@ -16,11 +16,14 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLabel,
     QVBoxLayout,
+    QHBoxLayout,
     QWidget,
     QMessageBox,
     QProgressBar,
     QTextEdit,
     QScrollArea,
+    QTabWidget,
+    QSplitter,
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import QThread, Signal, Qt
@@ -182,26 +185,34 @@ class MainWindow(QMainWindow):
         sel_btn.clicked.connect(self.select_project)
         run_btn = QPushButton("RUN")
         run_btn.clicked.connect(self.run_analysis)
+
         self.status = QLabel("Ready")
         self.progress = QProgressBar()
+
         self.summary_view = QTextEdit()
         self.summary_view.setReadOnly(True)
 
-        self.graph_area = QScrollArea()
-        self.graph_widget = QWidget()
-        self.graph_layout = QVBoxLayout()
-        self.graph_widget.setLayout(self.graph_layout)
-        self.graph_area.setWidgetResizable(True)
-        self.graph_area.setWidget(self.graph_widget)
+        self.graph_tabs = QTabWidget()
+
+        self.splitter = QSplitter(Qt.Vertical)
+        self.splitter.addWidget(self.summary_view)
+        self.splitter.addWidget(self.graph_tabs)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 3)
+
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(sel_btn)
+        btn_row.addWidget(run_btn)
 
         lay = QVBoxLayout()
-        lay.addWidget(sel_btn)
-        lay.addWidget(run_btn)
+        lay.addLayout(btn_row)
         lay.addWidget(self.status)
         lay.addWidget(self.progress)
-        lay.addWidget(self.summary_view)
-        lay.addWidget(self.graph_area)
-        container = QWidget(); container.setLayout(lay); self.setCentralWidget(container)
+        lay.addWidget(self.splitter)
+
+        container = QWidget()
+        container.setLayout(lay)
+        self.setCentralWidget(container)
 
     # ──────────────────────────────────────────── Slots
     def select_project(self):
@@ -249,29 +260,28 @@ class MainWindow(QMainWindow):
             text = "\n".join(f"{k}: {v:.3f}" for k, v in summary.items())
         self.summary_view.setPlainText(text)
 
-        # clear previous graphs
-        while self.graph_layout.count():
-            item = self.graph_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.setParent(None)
+        self.graph_tabs.clear()
 
-        graph_files = [
-            "snr_signal.png",
-            "snr_exposure.png",
-            "prnu_fit.png",
-            "dsnu_map.png",
-            "readnoise_map.png",
-            "prnu_residual_map.png",
-        ]
-        for fname in graph_files:
+        graph_files = {
+            "SNR-Signal": "snr_signal.png",
+            "SNR-Exposure": "snr_exposure.png",
+            "PRNU Fit": "prnu_fit.png",
+            "DSNU Map": "dsnu_map.png",
+            "Readnoise Map": "readnoise_map.png",
+            "PRNU Residual": "prnu_residual_map.png",
+        }
+
+        for title, fname in graph_files.items():
             path = out_dir / fname
             if path.is_file():
                 lbl = QLabel()
                 pix = QPixmap(str(path))
                 lbl.setPixmap(pix.scaledToWidth(600, Qt.SmoothTransformation))
-                self.graph_layout.addWidget(lbl)
-        self.graph_layout.addStretch()
+                lbl.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+                scroll = QScrollArea()
+                scroll.setWidgetResizable(True)
+                scroll.setWidget(lbl)
+                self.graph_tabs.addTab(scroll, title)
 
     def _analysis_error(self, msg: str):
         QMessageBox.critical(self, "Error", msg)
