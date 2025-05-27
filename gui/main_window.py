@@ -210,14 +210,10 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(1, 3)
 
         btn_row = QHBoxLayout()
-        btn_row.setContentsMargins(0, 0, 0, 0)
-        btn_row.setSpacing(2)
         btn_row.addWidget(self.sel_btn)
         btn_row.addWidget(self.run_btn)
 
         lay = QVBoxLayout()
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(2)
         lay.addLayout(btn_row)
         lay.addWidget(self.status)
         lay.addWidget(self.progress)

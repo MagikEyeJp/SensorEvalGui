@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, Tuple, Any, List
+import os
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import numpy as np
 import tifffile
