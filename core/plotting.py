@@ -40,22 +40,28 @@ def plot_snr_vs_signal(signal: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any],
     plt.close()
 
 
-def plot_snr_vs_exposure(exposure_ratios: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any], output_path: Path):
-    """Plot SNR–Exposure curve with labels from cfg.plot.exposures or auto."""
+def plot_snr_vs_exposure(data: Dict[float, tuple[np.ndarray, np.ndarray]], cfg: Dict[str, Any], output_path: Path):
+    """Plot SNR–Exposure curves per gain."""
+
     plot_cfg = cfg.get("plot", {})
     labels = plot_cfg.get("exposures")
     if labels is None:
-        # derive order from measurement.exposures nested‑dict (descending ratio)
         labels = [ratio for ratio, _ in cfgutil.exposure_entries(cfg)]
     label_strs = _auto_labels(labels)
 
+    base_ms = float(cfg.get("illumination", {}).get("exposure_ms", 1.0))
+    xticks = base_ms * np.array(labels)
+
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
     thr_lin = 10 ** (thresh / 20.0)
+
     plt.figure()
-    plt.semilogx(exposure_ratios, snr, marker="s", linestyle="-", label="Measured")
+    for gain, (ratios, snr) in sorted(data.items()):
+        times = base_ms * ratios
+        plt.semilogx(times, snr, marker="s", linestyle="-", label=f"{gain:g} dB")
     plt.axhline(thr_lin, color="r", linestyle="--", label=f"{thresh:g} dB")
-    plt.xticks(exposure_ratios, label_strs, rotation=45)
-    plt.xlabel("Exposure Ratio")
+    plt.xticks(xticks, label_strs, rotation=45)
+    plt.xlabel("Exposure Time (ms)")
     plt.ylabel("SNR")
     plt.title("SNR vs Exposure")
     plt.grid(True, which="both")

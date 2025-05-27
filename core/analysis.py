@@ -23,6 +23,7 @@ __all__ = [
     "calculate_dn_sat",
     "calculate_dynamic_range_dn",
     "calculate_system_sensitivity",
+    "collect_mid_roi_snr",
     "calculate_dn_at_snr",
     "calculate_snr_at_half",
     "calculate_dn_at_snr_one",
@@ -123,6 +124,28 @@ def extract_roi_table(project_dir: Path | str, cfg: Dict[str, Any]) -> List[Dict
     return rows
 
 
+def collect_mid_roi_snr(rows: List[Dict[str, Any]], mid_index: int) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
+    """Return {gain: (ratios, snr_lin)} for the specified grayscale ROI index."""
+    data: Dict[float, List[tuple[float, float]]] = {}
+    for row in rows:
+        if row.get("ROI Type") != "grayscale" or row.get("ROI No") != mid_index:
+            continue
+        gain = float(row["Gain (dB)"])
+        ratio = float(row["Exposure"])
+        mean = float(row["Mean"])
+        std = float(row["Std"])
+        if std == 0:
+            continue
+        data.setdefault(gain, []).append((ratio, mean / std))
+
+    res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
+    for gain, items in data.items():
+        items.sort(key=lambda x: x[0])
+        r, s = zip(*items)
+        res[gain] = (np.array(r), np.array(s))
+    return res
+
+
 def calculate_snr_curve(signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
     with np.errstate(divide="ignore", invalid="ignore"):
         snr = np.where(noise == 0, np.nan, signal / noise)
@@ -210,7 +233,10 @@ def calculate_dark_noise_gain(project_dir: Path | str, gain_db: float, cfg: Dict
 def calculate_dn_sat(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
     """Detect DN_sat using multiple heuristics."""
     p999 = float(np.percentile(flat_stack, 99.9))
-    sat_factor = cfg.get("illumination", {}).get("sat_factor", 0.95)
+    sat_factor = cfg.get("illumination", {}).get(
+        "sat_factor",
+        cfg.get("reference", {}).get("sat_factor", 0.95),
+    )
     max_from_factor = float(np.max(flat_stack)) / max(sat_factor, 1e-6)
     adc_bits = int(cfg.get("sensor", {}).get("adc_bits", 16))
     adc_max = (1 << adc_bits) - 1
@@ -281,15 +307,27 @@ def calculate_pseudo_prnu(
     return value, std_frame
 
 
-def calculate_system_sensitivity(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
-    """Return System Sensitivity (DN/µW·cm⁻²·s)."""
+def calculate_system_sensitivity(
+    flat_stack: np.ndarray,
+    cfg: Dict[str, Any],
+    rects: list[tuple[int, int, int, int]] | None = None,
+) -> float:
+    """Return System Sensitivity (DN/µW·cm⁻²·s) within ROI if provided."""
+
+    mask = (
+        _mask_from_rects(flat_stack.shape[1:], rects)
+        if rects
+        else np.ones(flat_stack.shape[1:], bool)
+    )
+
     illum = cfg.get("illumination", {})
     power = float(illum.get("power_uW_cm2", 1.0))
     exposure_ms = float(illum.get("exposure_ms", 1.0))
     denom = power * exposure_ms / 1000.0
     if denom == 0:
         return 0.0
-    mean_dn = float(np.mean(flat_stack))
+
+    mean_dn = float(np.mean(flat_stack[:, mask]))
     return mean_dn / denom
 
 

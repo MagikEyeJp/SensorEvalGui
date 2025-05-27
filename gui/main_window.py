@@ -32,6 +32,7 @@ from core.analysis import (
     calculate_dn_sat,
     calculate_dynamic_range_dn,
     calculate_system_sensitivity,
+    collect_mid_roi_snr,
     calculate_dn_at_snr,
     calculate_snr_at_half,
     calculate_dn_at_snr_one,
@@ -107,7 +108,7 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             tifffile.imwrite(out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack)
         prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg, flat_rects)
         prnu_list.append(prnu)
-        sens_list.append(calculate_system_sensitivity(flat_stack, cfg))
+        sens_list.append(calculate_system_sensitivity(flat_stack, cfg, flat_rects))
         if first:
             dsnu_map, rn_map, prnu_map = dsnu_map_tmp, rn_map_tmp, prnu_map_tmp
             dn_sat = calculate_dn_sat(flat_stack, cfg)
@@ -137,8 +138,15 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
     }
     save_summary_txt(summary, cfg, out_dir / "summary.txt")
 
+    mid_idx = (
+        cfg.get("reference", {}).get(
+            "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
+        )
+    )
+    exp_data = collect_mid_roi_snr(roi_table, mid_idx)
+
     plot_snr_vs_signal(signals, snr_lin, cfg, out_dir / "snr_signal.png")
-    plot_snr_vs_exposure(ratios, snr_lin, cfg, out_dir / "snr_exposure.png")
+    plot_snr_vs_exposure(exp_data, cfg, out_dir / "snr_exposure.png")
     plot_prnu_regression(signals, noises, cfg, out_dir / "prnu_fit.png")
     plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
     plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
