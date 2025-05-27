@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Mapping
+from datetime import datetime
+
+from utils import config as cfgutil
 import base64
 import json
 import csv
@@ -28,9 +31,47 @@ def _b64(img: Path) -> str:
 
 # ──────────────────────────────────────────────── public api
 
-def save_summary_txt(summary: Dict[str, float], cfg: Dict[str, Any], path: Path):
+def _meta_lines(cfg: Mapping[str, Any]) -> list[str]:
+    lines: list[str] = []
+    sensor_name = cfg.get("sensor", {}).get("name")
+    if sensor_name:
+        lines.append(f"Sensor: {sensor_name}")
+    env_note = cfg.get("environment", {}).get("note")
+    if env_note:
+        lines.append("Environment:")
+        for ln in str(env_note).splitlines():
+            lines.append(f"  {ln}")
+    power = cfg.get("illumination", {}).get("power_uW_cm2")
+    exp_ms = cfg.get("illumination", {}).get("exposure_ms")
+    if power is not None and exp_ms is not None:
+        lines.append(f"Illumination: power_uW_cm2={power}, exposure_ms={exp_ms}")
+    gains = ", ".join(f"{g:.0f} dB" for g, _ in cfgutil.gain_entries(cfg))
+    if gains:
+        lines.append(f"Gains: {gains}")
+    exps = ", ".join(str(r) for r, _ in cfgutil.exposure_entries(cfg))
+    if exps:
+        lines.append(f"Exposures: {exps}")
+    lines.append(f"Date: {datetime.now().strftime('%Y-%m-%d')}")
+    return lines
+
+
+def save_summary_txt(summary: Dict[float, Dict[str, float]], cfg: Dict[str, Any], path: Path):
     flag = cfg.get("output", {}).get("report_summary", True)
-    _write_if_enabled(flag, path, lambda p: p.write_text("\n".join(f"{k}: {v:.3f}" for k, v in summary.items()), encoding="utf-8"))
+
+    def writer(p: Path):
+        lines = _meta_lines(cfg)
+        lines.append("")
+        for gain, metrics in sorted(summary.items()):
+            lines.append(f"[Gain {gain:.0f} dB]")
+            for k, v in metrics.items():
+                if isinstance(v, (int, float)):
+                    lines.append(f"{k}: {v:.3f}")
+                else:
+                    lines.append(f"{k}: {v}")
+            lines.append("")
+        p.write_text("\n".join(lines), encoding="utf-8")
+
+    _write_if_enabled(flag, path, writer)
 
 
 def report_csv(stats: list[Dict[str, Any]], cfg: Dict[str, Any], path: Path):
