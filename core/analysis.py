@@ -172,8 +172,12 @@ def calculate_dark_noise(project_dir: Path | str, cfg: Dict[str, Any]) -> Tuple[
     mean_frame = np.mean(stack, axis=0)
     dsnu = _reduce(mean_frame[mask] - np.mean(mean_frame[mask]), stat_mode)
 
-    # Read noise: time-domain std per pixel → reduce spatially
-    read_noise_pix = np.std(stack, axis=0)
+    mode = int(cfg.get("processing", {}).get("read_noise_mode", 0))
+    if mode == 1:
+        diff = np.diff(stack, axis=0)
+        read_noise_pix = np.std(diff, axis=0) / np.sqrt(2)
+    else:
+        read_noise_pix = np.std(stack, axis=0)
     read_noise = _reduce(read_noise_pix[mask], stat_mode)
 
     return dsnu, read_noise
@@ -193,7 +197,12 @@ def calculate_dark_noise_gain(project_dir: Path | str, gain_db: float, cfg: Dict
     mean_frame = np.mean(stack, axis=0)
     dsnu_map = mean_frame - np.mean(mean_frame[mask])
     dsnu = _reduce(dsnu_map[mask], stat_mode)
-    read_noise_map = np.std(stack, axis=0)
+    mode = int(cfg.get("processing", {}).get("read_noise_mode", 0))
+    if mode == 1:
+        diff = np.diff(stack, axis=0)
+        read_noise_map = np.std(diff, axis=0) / np.sqrt(2)
+    else:
+        read_noise_map = np.std(stack, axis=0)
     read_noise = _reduce(read_noise_map[mask], stat_mode)
     return dsnu, read_noise, dsnu_map, read_noise_map
 
@@ -229,6 +238,10 @@ def calculate_pseudo_prnu(
     )
 
     mean_frame = np.mean(flat_stack, axis=0)
+    margin = cfg.get("processing", {}).get("mask_upper_margin")
+    if margin is not None:
+        dn_sat = calculate_dn_sat(flat_stack, cfg)
+        mask &= mean_frame <= margin * dn_sat
 
     apply_gain = cfg.get("processing", {}).get("apply_gain_map", False)
     order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
