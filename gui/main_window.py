@@ -19,8 +19,11 @@ from PySide6.QtWidgets import (
     QWidget,
     QMessageBox,
     QProgressBar,
+    QTextEdit,
+    QScrollArea,
 )
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QThread, Signal, Qt
 
 from utils.config import load_config
 import utils.config as cfgutil
@@ -181,12 +184,23 @@ class MainWindow(QMainWindow):
         run_btn.clicked.connect(self.run_analysis)
         self.status = QLabel("Ready")
         self.progress = QProgressBar()
+        self.summary_view = QTextEdit()
+        self.summary_view.setReadOnly(True)
+
+        self.graph_area = QScrollArea()
+        self.graph_widget = QWidget()
+        self.graph_layout = QVBoxLayout()
+        self.graph_widget.setLayout(self.graph_layout)
+        self.graph_area.setWidgetResizable(True)
+        self.graph_area.setWidget(self.graph_widget)
 
         lay = QVBoxLayout()
         lay.addWidget(sel_btn)
         lay.addWidget(run_btn)
         lay.addWidget(self.status)
         lay.addWidget(self.progress)
+        lay.addWidget(self.summary_view)
+        lay.addWidget(self.graph_area)
         container = QWidget(); container.setLayout(lay); self.setCentralWidget(container)
 
     # ──────────────────────────────────────────── Slots
@@ -222,6 +236,42 @@ class MainWindow(QMainWindow):
         self.status.setText("Done ✅")
         self.progress.setValue(100)
         self.worker = None
+
+        if self.project_dir is None or self.config is None:
+            return
+
+        out_dir = self.project_dir / self.config.get("output", {}).get("output_dir", "output")
+
+        summary_path = out_dir / "summary.txt"
+        if summary_path.is_file():
+            text = summary_path.read_text(encoding="utf-8")
+        else:
+            text = "\n".join(f"{k}: {v:.3f}" for k, v in summary.items())
+        self.summary_view.setPlainText(text)
+
+        # clear previous graphs
+        while self.graph_layout.count():
+            item = self.graph_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)
+
+        graph_files = [
+            "snr_signal.png",
+            "snr_exposure.png",
+            "prnu_fit.png",
+            "dsnu_map.png",
+            "readnoise_map.png",
+            "prnu_residual_map.png",
+        ]
+        for fname in graph_files:
+            path = out_dir / fname
+            if path.is_file():
+                lbl = QLabel()
+                pix = QPixmap(str(path))
+                lbl.setPixmap(pix.scaledToWidth(600, Qt.SmoothTransformation))
+                self.graph_layout.addWidget(lbl)
+        self.graph_layout.addStretch()
 
     def _analysis_error(self, msg: str):
         QMessageBox.critical(self, "Error", msg)

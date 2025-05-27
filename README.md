@@ -11,6 +11,7 @@ This project aims to:
 - Compute key metrics: SNR, Dynamic Range, read noise, PRNU
 - Provide real-time GUI visualization (PySide6 + matplotlib)
 - Export results as PNG graphs, summary text, CSV, and HTML report
+- Display the generated summary and graphs directly in the GUI
 
 ---
 
