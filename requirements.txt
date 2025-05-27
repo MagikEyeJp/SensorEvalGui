@@ -10,6 +10,7 @@ PySide6>=6.6,<6.7        # or swap for PyQt6 if preferred
 
 # YAML handling
 PyYAML>=6.0
+psutil>=5.9
 
 # Development / tests
 pytest>=8.0              # optional, unit tests

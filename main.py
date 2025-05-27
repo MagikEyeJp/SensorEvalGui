@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 from PySide6.QtWidgets import QApplication
 import sys
+import logging
 
 from gui.main_window import MainWindow
+from utils.logger import setup_logging
 
 
 def main() -> None:
+    setup_logging()
+    logging.info("Application started")
     app = QApplication(sys.argv)
     win = MainWindow()
     win.show()
