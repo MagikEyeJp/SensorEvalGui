@@ -6,6 +6,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from typing import Dict, Any
+import logging
+import threading
 
 import numpy as np
 import tifffile
@@ -37,6 +39,10 @@ import matplotlib.pyplot as plt
 
 from utils.config import load_config
 import utils.config as cfgutil
+from utils.logger import log_memory_usage
+
+# ensure only one pipeline runs at a time
+pipeline_lock = threading.Lock()
 from core.analysis import (
     extract_roi_stats,
     extract_roi_table,
@@ -74,107 +80,128 @@ class EvalWorker(QThread):
 
     def run(self) -> None:
         try:
+            logging.info("Evaluation worker started")
+            log_memory_usage("before pipeline: ")
             summary = run_pipeline(self.project, self.cfg)
             self.finished.emit(summary)
             self.progress.emit(100)
+            logging.info("Evaluation worker finished")
+            log_memory_usage("after pipeline: ")
         except Exception as e:  # pragma: no cover - UI error path
+            logging.exception("Worker failed: %s", e)
             self.error.emit(str(e))
 
 
 def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
-    # 1. ROI-based statistics
-    stats = extract_roi_stats(project, cfg)
-    if not stats:
-        raise RuntimeError("No valid stacks found for analysis")
+    """Run full analysis pipeline with logging and memory checks."""
+    logging.info("Pipeline start: %s", project)
+    with pipeline_lock:
+        try:
+            log_memory_usage("start: ")
 
-    tuples = sorted(stats.items(), key=lambda kv: kv[1]["mean"])
-    signals = np.array([kv[1]["mean"] for kv in tuples])
-    noises = np.array([kv[1]["std"] for kv in tuples])
-    snr_lin = signals / noises
-    ratios = np.array([kv[0][1] for kv in tuples])
+            # 1. ROI-based statistics
+            stats = extract_roi_stats(project, cfg)
+            if not stats:
+                raise RuntimeError("No valid stacks found for analysis")
 
-    roi_table = extract_roi_table(project, cfg)
-    flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
-    flat_rects = load_rois(flat_roi_file)
+            log_memory_usage("after roi stats: ")
+            tuples = sorted(stats.items(), key=lambda kv: kv[1]["mean"])
+            signals = np.array([kv[1]["mean"] for kv in tuples])
+            noises = np.array([kv[1]["std"] for kv in tuples])
+            snr_lin = signals / noises
+            ratios = np.array([kv[0][1] for kv in tuples])
 
-    # 2. Dark/flat metrics per gain (use first gain for maps)
-    debug_stacks = cfg["output"].get("debug_stacks", False)
+            roi_table = extract_roi_table(project, cfg)
+            flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
+            flat_rects = load_rois(flat_roi_file)
 
-    out_dir = project / cfg["output"].get("output_dir", "output")
-    out_dir.mkdir(exist_ok=True)
+            # 2. Dark/flat metrics per gain (use first gain for maps)
+            debug_stacks = cfg["output"].get("debug_stacks", False)
+            out_dir = project / cfg["output"].get("output_dir", "output")
+            out_dir.mkdir(exist_ok=True)
 
-    dsnu_list = []
-    rn_list = []
-    prnu_list = []
-    sens_list = []
-    first = True
-    for gain_db, _ in cfgutil.gain_entries(cfg):
-        dsnu, rn, dsnu_map_tmp, rn_map_tmp = calculate_dark_noise_gain(project, gain_db, cfg)
-        dsnu_list.append(dsnu)
-        rn_list.append(rn)
-        flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get("flat_lens_folder", "flat")
-        flat_stack = load_image_stack(flat_folder)
-        if debug_stacks and first:
-            dark_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get("dark_folder", "dark")
-            dark_stack = load_image_stack(dark_folder)
-            tifffile.imwrite(out_dir / f"dark_cache_{int(gain_db)}dB.tiff", dark_stack)
-            tifffile.imwrite(out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack)
-        prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg, flat_rects)
-        prnu_list.append(prnu)
-        sens_list.append(calculate_system_sensitivity(flat_stack, cfg, flat_rects))
-        if first:
-            dsnu_map, rn_map, prnu_map = dsnu_map_tmp, rn_map_tmp, prnu_map_tmp
-            dn_sat = calculate_dn_sat(flat_stack, cfg)
-            first = False
+            dsnu_list = []
+            rn_list = []
+            prnu_list = []
+            sens_list = []
+            first = True
+            for gain_db, _ in cfgutil.gain_entries(cfg):
+                logging.info("Processing gain %.1f dB", gain_db)
+                dsnu, rn, dsnu_map_tmp, rn_map_tmp = calculate_dark_noise_gain(project, gain_db, cfg)
+                dsnu_list.append(dsnu)
+                rn_list.append(rn)
+                flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get("flat_lens_folder", "flat")
+                flat_stack = load_image_stack(flat_folder)
+                if debug_stacks and first:
+                    dark_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get("dark_folder", "dark")
+                    dark_stack = load_image_stack(dark_folder)
+                    tifffile.imwrite(out_dir / f"dark_cache_{int(gain_db)}dB.tiff", dark_stack)
+                    tifffile.imwrite(out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack)
+                prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg, flat_rects)
+                prnu_list.append(prnu)
+                sens_list.append(calculate_system_sensitivity(flat_stack, cfg, flat_rects))
+                if first:
+                    dsnu_map, rn_map, prnu_map = dsnu_map_tmp, rn_map_tmp, prnu_map_tmp
+                    dn_sat = calculate_dn_sat(flat_stack, cfg)
+                    first = False
+                log_memory_usage(f"after gain {gain_db}: ")
 
-    dsnu = float(np.mean(dsnu_list)) if dsnu_list else 0.0
-    read_noise = float(np.mean(rn_list)) if rn_list else 0.0
-    dyn_range = calculate_dynamic_range_dn(dn_sat, read_noise)
-    prnu = float(np.mean(prnu_list)) if prnu_list else float('nan')
-    system_sens = float(np.mean(sens_list)) if sens_list else float('nan')
-    dn_at_10 = calculate_dn_at_snr(signals, snr_lin, cfg["processing"].get("snr_threshold_dB", 10.0))
-    snr_at_50 = calculate_snr_at_half(signals, snr_lin, dn_sat)
-    dn_at_0 = calculate_dn_at_snr_one(signals, snr_lin)
+            dsnu = float(np.mean(dsnu_list)) if dsnu_list else 0.0
+            read_noise = float(np.mean(rn_list)) if rn_list else 0.0
+            dyn_range = calculate_dynamic_range_dn(dn_sat, read_noise)
+            prnu = float(np.mean(prnu_list)) if prnu_list else float('nan')
+            system_sens = float(np.mean(sens_list)) if sens_list else float('nan')
+            dn_at_10 = calculate_dn_at_snr(signals, snr_lin, cfg["processing"].get("snr_threshold_dB", 10.0))
+            snr_at_50 = calculate_snr_at_half(signals, snr_lin, dn_sat)
+            dn_at_0 = calculate_dn_at_snr_one(signals, snr_lin)
 
-    stats_rows = roi_table
-    report_csv(stats_rows, cfg, out_dir / "roi_stats.csv")
-    summary = {
-        "Dynamic Range (dB)": dyn_range,
-        "DSNU (DN)": dsnu,
-        "Read Noise (DN)": read_noise,
-        "DN_sat": dn_sat,
-        "Pseudo PRNU (%)": prnu,
-        "System Sensitivity": system_sens,
-        "DN @ 10 dB": dn_at_10,
-        "SNR @ 50% (dB)": snr_at_50,
-        "DN @ 0 dB": dn_at_0,
-    }
-    save_summary_txt(summary, cfg, out_dir / "summary.txt")
+            log_memory_usage("after metrics: ")
 
-    mid_idx = (
-        cfg.get("reference", {}).get(
-            "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
-        )
-    )
-    exp_data = collect_mid_roi_snr(roi_table, mid_idx)
+            stats_rows = roi_table
+            report_csv(stats_rows, cfg, out_dir / "roi_stats.csv")
+            summary = {
+                "Dynamic Range (dB)": dyn_range,
+                "DSNU (DN)": dsnu,
+                "Read Noise (DN)": read_noise,
+                "DN_sat": dn_sat,
+                "Pseudo PRNU (%)": prnu,
+                "System Sensitivity": system_sens,
+                "DN @ 10 dB": dn_at_10,
+                "SNR @ 50% (dB)": snr_at_50,
+                "DN @ 0 dB": dn_at_0,
+            }
+            save_summary_txt(summary, cfg, out_dir / "summary.txt")
 
-    plot_snr_vs_signal(signals, snr_lin, cfg, out_dir / "snr_signal.png")
-    plot_snr_vs_exposure(exp_data, cfg, out_dir / "snr_exposure.png")
-    plot_prnu_regression(signals, noises, cfg, out_dir / "prnu_fit.png")
-    plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
-    plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
-    plot_heatmap(prnu_map, "PRNU residual", out_dir / "prnu_residual_map.png")
+            mid_idx = (
+                cfg.get("reference", {}).get(
+                    "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
+                )
+            )
+            exp_data = collect_mid_roi_snr(roi_table, mid_idx)
 
-    graphs = {
-        "snr_signal": out_dir / "snr_signal.png",
-        "snr_exposure": out_dir / "snr_exposure.png",
-        "prnu_fit": out_dir / "prnu_fit.png",
-        "dsnu_map": out_dir / "dsnu_map.png",
-        "readnoise_map": out_dir / "readnoise_map.png",
-        "prnu_residual_map": out_dir / "prnu_residual_map.png",
-    }
-    report_html(summary, graphs, cfg, out_dir / "report.html")
-    return summary
+            plot_snr_vs_signal(signals, snr_lin, cfg, out_dir / "snr_signal.png")
+            plot_snr_vs_exposure(exp_data, cfg, out_dir / "snr_exposure.png")
+            plot_prnu_regression(signals, noises, cfg, out_dir / "prnu_fit.png")
+            plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
+            plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
+            plot_heatmap(prnu_map, "PRNU residual", out_dir / "prnu_residual_map.png")
+            log_memory_usage("after plots: ")
+
+            graphs = {
+                "snr_signal": out_dir / "snr_signal.png",
+                "snr_exposure": out_dir / "snr_exposure.png",
+                "prnu_fit": out_dir / "prnu_fit.png",
+                "dsnu_map": out_dir / "dsnu_map.png",
+                "readnoise_map": out_dir / "readnoise_map.png",
+                "prnu_residual_map": out_dir / "prnu_residual_map.png",
+            }
+            report_html(summary, graphs, cfg, out_dir / "report.html")
+            logging.info("Pipeline completed")
+            log_memory_usage("pipeline end: ")
+            return summary
+        except Exception as e:  # pragma: no cover - log path
+            logging.exception("Pipeline error: %s", e)
+            raise
 
 
 class MainWindow(QMainWindow):
