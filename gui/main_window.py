@@ -28,6 +28,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import QThread, Signal, Qt
 
+from matplotlib.backends.backend_qtagg import (
+    FigureCanvasQTAgg as FigureCanvas,
+    NavigationToolbar2QT,
+)
+import matplotlib.pyplot as plt
+
 from utils.config import load_config
 import utils.config as cfgutil
 from core.analysis import (
@@ -240,6 +246,7 @@ class MainWindow(QMainWindow):
         self.summary_view.clear()
         self.graph_tabs.clear()
         self.status.setText("Running...")
+        plt.switch_backend("Agg")
         self.worker = EvalWorker(self.project_dir, self.config)
         self.worker.finished.connect(self._analysis_done)
         self.worker.error.connect(self._analysis_error)
@@ -280,18 +287,30 @@ class MainWindow(QMainWindow):
         for title, fname in graph_files.items():
             path = out_dir / fname
             if path.is_file():
-                lbl = QLabel()
-                pix = QPixmap(str(path))
-                lbl.setPixmap(pix.scaledToWidth(600, Qt.SmoothTransformation))
-                lbl.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-                scroll = QScrollArea()
-                scroll.setWidgetResizable(True)
-                scroll.setWidget(lbl)
-                self.graph_tabs.addTab(scroll, title)
+                widget = self._create_canvas(path)
+                self.graph_tabs.addTab(widget, title)
 
         self.resize(640, self.height())
         h = self.splitter.height()
         self.splitter.setSizes([int(h * 0.25), int(h * 0.75)])
+
+    def _create_canvas(self, png_path: Path) -> QWidget:
+        """Return QWidget with interactive matplotlib canvas for the PNG."""
+        plt.switch_backend("QtAgg")
+        img = plt.imread(str(png_path))
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.imshow(img)
+        ax.set_axis_off()
+        canvas = FigureCanvas(fig)
+        toolbar = NavigationToolbar2QT(canvas, None)
+        w = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(toolbar)
+        layout.addWidget(canvas)
+        w.setLayout(layout)
+        return w
 
     def _analysis_error(self, msg: str):
         QMessageBox.critical(self, "Error", msg)
