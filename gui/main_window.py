@@ -124,12 +124,11 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             rn_list = []
             prnu_list = []
             sens_list = []
+            per_gain: Dict[float, Dict[str, float]] = {}
             first = True
             for gain_db, _ in cfgutil.gain_entries(cfg):
                 logging.info("Processing gain %.1f dB", gain_db)
                 dsnu, rn, dsnu_map_tmp, rn_map_tmp = calculate_dark_noise_gain(project, gain_db, cfg)
-                dsnu_list.append(dsnu)
-                rn_list.append(rn)
                 flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get("flat_lens_folder", "flat")
                 flat_stack = load_image_stack(flat_folder)
                 if debug_stacks and first:
@@ -138,12 +137,43 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                     tifffile.imwrite(out_dir / f"dark_cache_{int(gain_db)}dB.tiff", dark_stack)
                     tifffile.imwrite(out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack)
                 prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg, flat_rects)
-                prnu_list.append(prnu)
-                sens_list.append(calculate_system_sensitivity(flat_stack, cfg, flat_rects))
+                sens = calculate_system_sensitivity(flat_stack, cfg, flat_rects)
                 if first:
                     dsnu_map, rn_map, prnu_map = dsnu_map_tmp, rn_map_tmp, prnu_map_tmp
                     dn_sat = calculate_dn_sat(flat_stack, cfg)
                     first = False
+
+                # SNR metrics for this gain
+                tuples_g = sorted((kv for kv in stats.items() if kv[0][0] == gain_db), key=lambda kv: kv[1]["mean"])
+                if tuples_g:
+                    sig_g = np.array([kv[1]["mean"] for kv in tuples_g])
+                    noise_g = np.array([kv[1]["std"] for kv in tuples_g])
+                    snr_lin_g = sig_g / noise_g
+                    dn_at_10_g = calculate_dn_at_snr(sig_g, snr_lin_g, cfg["processing"].get("snr_threshold_dB", 10.0))
+                    snr_at_50_g = calculate_snr_at_half(sig_g, snr_lin_g, dn_sat)
+                    dn_at_0_g = calculate_dn_at_snr_one(sig_g, snr_lin_g)
+                else:
+                    dn_at_10_g = float("nan")
+                    snr_at_50_g = float("nan")
+                    dn_at_0_g = float("nan")
+
+                dyn_range_g = calculate_dynamic_range_dn(dn_sat, rn)
+                per_gain[gain_db] = {
+                    "Dynamic Range (dB)": dyn_range_g,
+                    "DSNU (DN)": dsnu,
+                    "Read Noise (DN)": rn,
+                    "DN_sat": dn_sat,
+                    "Pseudo PRNU (%)": prnu,
+                    "System Sensitivity": sens,
+                    "DN @ 10 dB": dn_at_10_g,
+                    "SNR @ 50% (dB)": snr_at_50_g,
+                    "DN @ 0 dB": dn_at_0_g,
+                }
+
+                dsnu_list.append(dsnu)
+                rn_list.append(rn)
+                prnu_list.append(prnu)
+                sens_list.append(sens)
                 log_memory_usage(f"after gain {gain_db}: ")
 
             dsnu = float(np.mean(dsnu_list)) if dsnu_list else 0.0
@@ -159,7 +189,7 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
 
             stats_rows = roi_table
             report_csv(stats_rows, cfg, out_dir / "roi_stats.csv")
-            summary = {
+            summary_avg = {
                 "Dynamic Range (dB)": dyn_range,
                 "DSNU (DN)": dsnu,
                 "Read Noise (DN)": read_noise,
@@ -170,7 +200,7 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 "SNR @ 50% (dB)": snr_at_50,
                 "DN @ 0 dB": dn_at_0,
             }
-            save_summary_txt(summary, cfg, out_dir / "summary.txt")
+            save_summary_txt(per_gain, cfg, out_dir / "summary.txt")
 
             mid_idx = (
                 cfg.get("reference", {}).get(
@@ -195,10 +225,10 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 "readnoise_map": out_dir / "readnoise_map.png",
                 "prnu_residual_map": out_dir / "prnu_residual_map.png",
             }
-            report_html(summary, graphs, cfg, out_dir / "report.html")
+            report_html(summary_avg, graphs, cfg, out_dir / "report.html")
             logging.info("Pipeline completed")
             log_memory_usage("pipeline end: ")
-            return summary
+            return summary_avg
         except Exception as e:  # pragma: no cover - log path
             logging.exception("Pipeline error: %s", e)
             raise
