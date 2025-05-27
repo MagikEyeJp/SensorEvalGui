@@ -13,6 +13,8 @@ from utils import config as cfgutil
 __all__ = [
     "plot_snr_vs_signal",
     "plot_snr_vs_exposure",
+    "plot_prnu_regression",
+    "plot_heatmap",
 ]
 
 
@@ -49,6 +51,35 @@ def plot_snr_vs_exposure(exposure_ratios: np.ndarray, snr: np.ndarray, cfg: Dict
     plt.ylabel("SNR")
     plt.title("SNR vs Exposure")
     plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+
+
+def plot_prnu_regression(means: np.ndarray, stds: np.ndarray, output_path: Path):
+    """Plot PRNU regression (std vs mean) with simple linear fit."""
+    plt.figure()
+    plt.scatter(means, stds, s=8, alpha=0.6)
+    if means.size > 1:
+        p = np.polyfit(means, stds, 1)
+        x = np.linspace(means.min(), means.max(), 100)
+        y = np.polyval(p, x)
+        plt.plot(x, y, "r--", label=f"y={p[0]:.3f}x+{p[1]:.3f}")
+        plt.legend(fontsize=8)
+    plt.xlabel("Mean (DN)")
+    plt.ylabel("Std (DN)")
+    plt.title("PRNU Regression")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+
+
+def plot_heatmap(data: np.ndarray, title: str, output_path: Path):
+    plt.figure()
+    plt.imshow(data, cmap="viridis")
+    plt.title(title)
+    plt.colorbar(label="DN")
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()

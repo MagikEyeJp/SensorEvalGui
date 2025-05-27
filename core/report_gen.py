@@ -61,13 +61,21 @@ def report_html(summary: Dict[str, float], graphs: Dict[str, Path], cfg: Dict[st
         for k in order
     )
 
-    html = f"""
-    <html><head><meta charset='utf-8'><title>Sensor Evaluation Report</title></head><body>
-    <h1>Sensor Evaluation Summary</h1>
-    <table border='1' cellpadding='4'>{rows}</table>
-    <h2>SNR vs Signal</h2>
-    <img src='data:image/png;base64,{_b64(graphs['snr_signal'])}' width='600'/>
-    <h2>SNR vs Exposure</h2>
-    <img src='data:image/png;base64,{_b64(graphs['snr_exposure'])}' width='600'/>
-    </body></html>"""
+    html = ["<html><head><meta charset='utf-8'><title>Sensor Evaluation Report</title></head><body>"]
+    html.append("<h1>Sensor Evaluation Summary</h1>")
+    html.append(f"<table border='1' cellpadding='4'>{rows}</table>")
+    for key in [
+        "snr_signal",
+        "snr_exposure",
+        "prnu_fit",
+        "dsnu_map",
+        "readnoise_map",
+        "prnu_residual_map",
+    ]:
+        if key in graphs and graphs[key].exists():
+            title = key.replace("_", " ").title()
+            html.append(f"<h2>{title}</h2>")
+            html.append(f"<img src='data:image/png;base64,{_b64(graphs[key])}' width='600'/>")
+    html.append("</body></html>")
+    html = "\n".join(html)
     path.write_text(html, encoding="utf-8")

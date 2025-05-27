@@ -57,9 +57,13 @@ python -m sensor_eval
 
 	•	📈 snr_signal.png: SNR vs Signal (DN)
 	•	📉 snr_exposure.png: SNR vs Exposure Ratio
-	•	📋 summary.txt: Key evaluation metrics
-	•	📄 report.html: Embedded HTML report
-	•	📑 roi_stats.csv: (Planned) Per-condition stats
+        •       🟢 prnu_fit.png: PRNU regression
+        •       🗺 dsnu_map.png: DSNU map
+        •       🗺 readnoise_map.png: Read noise map
+        •       🗺 prnu_residual_map.png: PRNU residual map
+        •       📋 summary.txt: Key evaluation metrics
+        •       📄 report.html: Embedded HTML report
+        •       📑 roi_stats.csv: (Planned) Per-condition stats
 
 ##🔮 Planned Features
 
