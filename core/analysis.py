@@ -24,6 +24,8 @@ __all__ = [
     "calculate_dynamic_range_dn",
     "calculate_system_sensitivity",
     "calculate_dn_at_snr",
+    "calculate_snr_at_half",
+    "calculate_dn_at_snr_one",
     "calculate_pseudo_prnu",
 ]
 
@@ -248,3 +250,22 @@ def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: f
         return float(x1)
     r = (thr_lin - y0) / (y1 - y0)
     return float(x0 + r * (x1 - x0))
+
+
+def calculate_snr_at_half(signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float) -> float:
+    """Return SNR (dB) at half of DN_sat using linear interpolation."""
+    if signal.size == 0:
+        return float("nan")
+    order = np.argsort(signal)
+    sig_sorted = signal[order]
+    snr_sorted = snr_lin[order]
+    target = 0.5 * dn_sat
+    snr_val = float(np.interp(target, sig_sorted, snr_sorted))
+    if snr_val <= 0:
+        return float("nan")
+    return float(20.0 * np.log10(snr_val))
+
+
+def calculate_dn_at_snr_one(signal: np.ndarray, snr_lin: np.ndarray) -> float:
+    """Convenience for DN where SNR=1 (0 dB)."""
+    return calculate_dn_at_snr(signal, snr_lin, 0.0)

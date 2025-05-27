@@ -33,6 +33,8 @@ from core.analysis import (
     calculate_dynamic_range_dn,
     calculate_system_sensitivity,
     calculate_dn_at_snr,
+    calculate_snr_at_half,
+    calculate_dn_at_snr_one,
     calculate_pseudo_prnu,
 )
 from core.plotting import (
@@ -114,6 +116,8 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
     prnu = float(np.mean(prnu_list)) if prnu_list else float('nan')
     system_sens = float(np.mean(sens_list)) if sens_list else float('nan')
     dn_at_10 = calculate_dn_at_snr(signals, snr_lin, cfg["processing"].get("snr_threshold_dB", 10.0))
+    snr_at_50 = calculate_snr_at_half(signals, snr_lin, dn_sat)
+    dn_at_0 = calculate_dn_at_snr_one(signals, snr_lin)
 
     stats_rows = roi_table
     report_csv(stats_rows, cfg, out_dir / "roi_stats.csv")
@@ -125,6 +129,8 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
         "PRNU (%)": prnu,
         "System Sensitivity": system_sens,
         "DN @ 10 dB": dn_at_10,
+        "SNR @ 50% (dB)": snr_at_50,
+        "DN @ 0 dB": dn_at_0,
     }
     save_summary_txt(summary, cfg, out_dir / "summary.txt")
 

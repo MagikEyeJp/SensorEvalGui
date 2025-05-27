@@ -62,7 +62,11 @@ output:
   debug_stacks: false
   report_order:
     - Dynamic Range (dB)
-    - SNR (max)
-    - Read Noise
-    - DN @ 20 dB
+    - SNR @ 50% (dB)
+    - DN @ 10 dB
+    - DN @ 0 dB
+    - Read Noise (DN)
+    - DSNU (DN)
+    - DN_sat
     - PRNU (%)
+    - System Sensitivity
