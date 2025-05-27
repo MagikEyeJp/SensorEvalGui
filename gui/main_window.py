@@ -43,6 +43,7 @@ from core.plotting import (
     plot_prnu_regression,
     plot_heatmap,
 )
+from utils.roi import load_rois
 from core.report_gen import save_summary_txt, report_csv, report_html
 from core.loader import load_image_stack
 
@@ -79,6 +80,8 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
     ratios = np.array([kv[0][1] for kv in tuples])
 
     roi_table = extract_roi_table(project, cfg)
+    flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
+    flat_rects = load_rois(flat_roi_file)
 
     # 2. Dark/flat metrics per gain (use first gain for maps)
     debug_stacks = cfg["output"].get("debug_stacks", False)
@@ -102,7 +105,7 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             dark_stack = load_image_stack(dark_folder)
             tifffile.imwrite(out_dir / f"dark_cache_{int(gain_db)}dB.tiff", dark_stack)
             tifffile.imwrite(out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack)
-        prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg)
+        prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg, flat_rects)
         prnu_list.append(prnu)
         sens_list.append(calculate_system_sensitivity(flat_stack, cfg))
         if first:
@@ -126,7 +129,7 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
         "DSNU (DN)": dsnu,
         "Read Noise (DN)": read_noise,
         "DN_sat": dn_sat,
-        "PRNU (%)": prnu,
+        "Pseudo PRNU (%)": prnu,
         "System Sensitivity": system_sens,
         "DN @ 10 dB": dn_at_10,
         "SNR @ 50% (dB)": snr_at_50,
