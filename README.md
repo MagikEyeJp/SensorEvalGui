@@ -26,7 +26,7 @@ This project aims to:
 	│   ├── plotting.py              # Graph generation with matplotlib
 	│   └── report_gen.py            # summary.txt and HTML report
 	├── config/
-	│   └── default_config.json      # (Planned) configurable behavior
+        │   └── default_config.yaml      # configurable behavior
 	└── utils/
 	└── logger.py                # (Planned) logging utilities
 
@@ -47,7 +47,7 @@ Tested on:
 
 ## 🚀 How to Run
 
-python -m sensor_eval
+python main.py
 
 	1.	Select a folder containing a stack of 16-bit TIFF images
 	2.	The GUI will compute ROI stats, plot SNR graphs, and export results
@@ -63,12 +63,12 @@ python -m sensor_eval
         •       🗺 prnu_residual_map.png: PRNU residual map
         •       📋 summary.txt: Key evaluation metrics
         •       📄 report.html: Embedded HTML report
-        •       📑 roi_stats.csv: (Planned) Per-condition stats
+        •       📑 roi_stats.csv: Per-condition stats
 
 ##🔮 Planned Features
 
 	•	ROI/pixel mode switching in GUI
-	•	Configurable pipeline via default_config.json
+	•	Configurable pipeline via default_config.yaml
 	•	Support for multi-gain and multi-exposure batch evaluation
 	•	PRNU and black-level correction logic
 	•	Optional Excel/Markdown export
