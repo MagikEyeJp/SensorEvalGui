@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Any, Sequence
 
+import matplotlib
+matplotlib.use("Agg")  # avoid GUI backend so plotting works inside threads
 import matplotlib.pyplot as plt
 import numpy as np
 
