@@ -139,7 +139,7 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
 
     plot_snr_vs_signal(signals, snr_lin, cfg, out_dir / "snr_signal.png")
     plot_snr_vs_exposure(ratios, snr_lin, cfg, out_dir / "snr_exposure.png")
-    plot_prnu_regression(signals, noises, out_dir / "prnu_fit.png")
+    plot_prnu_regression(signals, noises, cfg, out_dir / "prnu_fit.png")
     plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
     plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
     plot_heatmap(prnu_map, "PRNU residual", out_dir / "prnu_residual_map.png")

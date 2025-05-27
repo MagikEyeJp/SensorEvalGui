@@ -65,12 +65,17 @@ def plot_snr_vs_exposure(exposure_ratios: np.ndarray, snr: np.ndarray, cfg: Dict
     plt.close()
 
 
-def plot_prnu_regression(means: np.ndarray, stds: np.ndarray, output_path: Path):
-    """Plot PRNU regression (std vs mean) with simple linear fit."""
+def plot_prnu_regression(means: np.ndarray, stds: np.ndarray, cfg: Dict[str, Any], output_path: Path):
+    """Plot PRNU regression (std vs mean) with LS or WLS fit."""
     plt.figure()
     plt.scatter(means, stds, s=8, alpha=0.6)
     if means.size > 1:
-        p = np.polyfit(means, stds, 1)
+        fit_mode = cfg.get("processing", {}).get("prnu_fit", "LS").upper()
+        if fit_mode == "WLS":
+            w = 1.0 / np.maximum(stds, 1e-6)
+            p = np.polyfit(means, stds, 1, w=w)
+        else:
+            p = np.polyfit(means, stds, 1)
         x = np.linspace(means.min(), means.max(), 100)
         y = np.polyval(p, x)
         plt.plot(x, y, "r--", label=f"y={p[0]:.3f}x+{p[1]:.3f}")
