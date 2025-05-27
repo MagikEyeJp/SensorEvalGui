@@ -63,6 +63,7 @@ python -m sensor_eval
         •       🗺 prnu_residual_map.png: PRNU residual map
         •       📋 summary.txt: Key evaluation metrics
         •       📄 report.html: Embedded HTML report
+        •       📌 Metrics include SNR @ 50% and DN @ SNR=1 (0 dB)
         •       📑 roi_stats.csv: (Planned) Per-condition stats
 
 ##🔮 Planned Features

@@ -50,10 +50,14 @@ def report_html(summary: Dict[str, float], graphs: Dict[str, Path], cfg: Dict[st
 
     order = cfg.get("output", {}).get("report_order", [
         "Dynamic Range (dB)",
-        "SNR (max)",
-        "Read Noise",
-        "DN @ 20 dB",
+        "SNR @ 50% (dB)",
+        "DN @ 10 dB",
+        "DN @ 0 dB",
+        "Read Noise (DN)",
+        "DSNU (DN)",
+        "DN_sat",
         "PRNU (%)",
+        "System Sensitivity",
     ])
 
     rows = "".join(
