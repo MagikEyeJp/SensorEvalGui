@@ -181,10 +181,11 @@ class MainWindow(QMainWindow):
 
     # ──────────────────────────────────────────── UI setup
     def _setup_ui(self):
-        sel_btn = QPushButton("Select Project Folder")
-        sel_btn.clicked.connect(self.select_project)
-        run_btn = QPushButton("RUN")
-        run_btn.clicked.connect(self.run_analysis)
+        self.sel_btn = QPushButton("Select Project Folder")
+        self.sel_btn.clicked.connect(self.select_project)
+        self.run_btn = QPushButton("RUN")
+        self.run_btn.setEnabled(False)
+        self.run_btn.clicked.connect(self.run_analysis)
 
         self.status = QLabel("Ready")
         self.progress = QProgressBar()
@@ -201,8 +202,8 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(1, 3)
 
         btn_row = QHBoxLayout()
-        btn_row.addWidget(sel_btn)
-        btn_row.addWidget(run_btn)
+        btn_row.addWidget(self.sel_btn)
+        btn_row.addWidget(self.run_btn)
 
         lay = QVBoxLayout()
         lay.addLayout(btn_row)
@@ -226,6 +227,7 @@ class MainWindow(QMainWindow):
             return
         self.config = load_config(cfg_path)
         self.status.setText(f"Project loaded: {self.project_dir}")
+        self.run_btn.setEnabled(True)
         self.run_analysis()
 
     def run_analysis(self):
@@ -234,6 +236,9 @@ class MainWindow(QMainWindow):
             return
         if self.worker is not None:
             return
+        self.sel_btn.setEnabled(False)
+        self.summary_view.clear()
+        self.graph_tabs.clear()
         self.status.setText("Running...")
         self.worker = EvalWorker(self.project_dir, self.config)
         self.worker.finished.connect(self._analysis_done)
@@ -247,6 +252,7 @@ class MainWindow(QMainWindow):
         self.status.setText("Done ✅")
         self.progress.setValue(100)
         self.worker = None
+        self.sel_btn.setEnabled(True)
 
         if self.project_dir is None or self.config is None:
             return
@@ -283,11 +289,16 @@ class MainWindow(QMainWindow):
                 scroll.setWidget(lbl)
                 self.graph_tabs.addTab(scroll, title)
 
+        self.resize(640, self.height())
+        h = self.splitter.height()
+        self.splitter.setSizes([int(h * 0.25), int(h * 0.75)])
+
     def _analysis_error(self, msg: str):
         QMessageBox.critical(self, "Error", msg)
         self.status.setText("Error")
         self.progress.setValue(0)
         self.worker = None
+        self.sel_btn.setEnabled(True)
 
 
 # ──────────────────────────────────────────── Entrypoint
