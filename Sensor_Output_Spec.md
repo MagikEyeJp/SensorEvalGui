@@ -30,7 +30,8 @@ Gainごとに下記画像セットを入力とする。それぞれ10枚以上�
 ※ 各指標の算出方法は以下に明記します（関連configキー対応）
 
 #### 1. `summary.txt'
-センサ共通メタ情報、測定条件、およびGainごとにGUIおよびテキストファイルとして出力
+センサ共通メタ情報、測定条件を先頭に出力
+Gainごとに下記項目を出力
 
 * **System Sensitivity (DN / μW·cm⁻²·s)**：フラット画像(各露光条件) のフラットROIの平均DNを、照度 power_uW_cm2（μW/cm²）×露光時間 exposure_ms（ms）で割って計算する。
 ※ conversion gainが不明のため、DN感度 `System Sensitivity (DN / μW·cm²·s)` を出力し、レンズ込みの実効感度とする。
