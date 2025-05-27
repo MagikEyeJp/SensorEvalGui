@@ -83,10 +83,10 @@ class EvalWorker(QThread):
             logging.info("Evaluation worker started")
             log_memory_usage("before pipeline: ")
             summary = run_pipeline(self.project, self.cfg)
-            self.finished.emit(summary)
             self.progress.emit(100)
             logging.info("Evaluation worker finished")
             log_memory_usage("after pipeline: ")
+            self.finished.emit(summary)
         except Exception as e:  # pragma: no cover - UI error path
             logging.exception("Worker failed: %s", e)
             self.error.emit(str(e))
@@ -283,6 +283,7 @@ class MainWindow(QMainWindow):
         self.worker.finished.connect(self._analysis_done)
         self.worker.error.connect(self._analysis_error)
         self.worker.progress.connect(self.progress.setValue)
+        QThread.finished.connect(self.worker, self._worker_finished)
         self.progress.setValue(0)
         self.worker.start()
 
@@ -290,7 +291,6 @@ class MainWindow(QMainWindow):
     def _analysis_done(self, summary: Dict[str, float]):
         self.status.setText("Done ✅")
         self.progress.setValue(100)
-        self.worker = None
         self.run_btn.setEnabled(True)
         self.sel_btn.setEnabled(True)
 
@@ -358,11 +358,16 @@ class MainWindow(QMainWindow):
             canvas.figure.set_size_inches(w, h, forward=True)
             canvas.draw_idle()
 
+    def _worker_finished(self) -> None:
+        """Cleanup after worker thread finishes."""
+        if self.worker is not None:
+            self.worker.wait()
+            self.worker = None
+
     def _analysis_error(self, msg: str):
         QMessageBox.critical(self, "Error", msg)
         self.status.setText("Error")
         self.progress.setValue(0)
-        self.worker = None
         self.sel_btn.setEnabled(True)
 
     # ──────────────────────────────────────────── Events
