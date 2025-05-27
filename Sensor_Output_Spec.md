@@ -151,7 +151,7 @@ measurement:
     1.0:    { folder: chart_x1 }
     0.5:    { folder: chart_x0.5 }
     0.25:   { folder: chart_x0.25 }
-    0.0125: { folder: chart_x0.125 }
+    0.125: { folder: chart_x0.125 }
     0.0625: { folder: chart_x0.0625 }
 
   flat_lens_folder: LensFlat
@@ -172,9 +172,8 @@ processing:
   snr_threshold_dB: 10       # SNR評価での可視限界（10dB など）
   min_sig_factor: 3           # σ_read の n倍以上を有効信号とみなす
   apply_gain_map : false      # PRNUの算出時gain_map補正をするか
-  plane_fit_order: 2          # ROI内傾斜補正次数
-  read_noise_mode: 0          # 差分法との切り替え
   prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
+  plane_fit_order: 2          # ROI内傾斜補正次数
 
 plot:
   exposures: [1.0, 0.0625]    # 図1に描画する露光倍率
