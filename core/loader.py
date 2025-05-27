@@ -18,8 +18,9 @@ __all__ = [
 # -----------------------------------------------------------------------------
 
 def _collect_frames(folder: Path) -> List[Path]:
-    """Return sorted list of *.tiff files in *folder*."""
-    return sorted(p for p in folder.iterdir() if p.suffix.lower() == ".tiff")
+    """Return sorted list of TIFF files (.tif/.tiff) in *folder*."""
+    exts = {".tiff", ".tif"}
+    return sorted(p for p in folder.iterdir() if p.suffix.lower() in exts)
 
 
 # -----------------------------------------------------------------------------

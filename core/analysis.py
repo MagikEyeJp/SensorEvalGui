@@ -17,6 +17,11 @@ __all__ = [
     "extract_roi_stats",
     "calculate_snr_curve",
     "calculate_dynamic_range",
+    "calculate_dark_noise",
+    "calculate_dark_noise_gain",
+    "calculate_dn_sat",
+    "calculate_dynamic_range_dn",
+    "calculate_pseudo_prnu",
 ]
 
 # ───────────────────────────── internal helpers
@@ -85,3 +90,83 @@ def calculate_dynamic_range(snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, 
     if sig_min == 0:
         return 0.0
     return 20.0 * np.log10(sig_max / sig_min)
+
+
+def _reduce(values: np.ndarray, mode: str) -> float:
+    if mode == "rms":
+        return float(np.sqrt(np.mean(values ** 2)))
+    if mode == "mean":
+        return float(np.mean(values))
+    if mode == "median":
+        return float(np.median(values))
+    raise ValueError(mode)
+
+
+def calculate_dark_noise(project_dir: Path | str, cfg: Dict[str, Any]) -> Tuple[float, float]:
+    """Return (DSNU, read_noise) from dark stack."""
+    project_dir = Path(project_dir)
+    dark_folder = project_dir / cfg["measurement"].get("dark_folder", "dark")
+    if not dark_folder.is_dir():
+        raise FileNotFoundError(f"Dark folder not found: {dark_folder}")
+    stack = load_image_stack(dark_folder)
+
+    roi_file = project_dir / cfg["measurement"].get("flat_roi_file")
+    rects = load_rois(roi_file)
+    mask = _mask_from_rects(stack.shape[1:], rects)
+
+    stat_mode = cfg["processing"].get("stat_mode", "rms")
+
+    # DSNU: spatial std of mean frame
+    mean_frame = np.mean(stack, axis=0)
+    dsnu = _reduce(mean_frame[mask] - np.mean(mean_frame[mask]), stat_mode)
+
+    # Read noise: time-domain std per pixel → reduce spatially
+    read_noise_pix = np.std(stack, axis=0)
+    read_noise = _reduce(read_noise_pix[mask], stat_mode)
+
+    return dsnu, read_noise
+
+
+def calculate_dark_noise_gain(project_dir: Path | str, gain_db: float, cfg: Dict[str, Any]) -> Tuple[float, float, np.ndarray, np.ndarray]:
+    """Return (dsnu, read_noise, dsnu_map, read_noise_map) for given gain."""
+    gain_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg)
+    dark_folder = gain_folder / cfg["measurement"].get("dark_folder", "dark")
+    stack = load_image_stack(dark_folder)
+
+    roi_file = project_dir / cfg["measurement"].get("flat_roi_file")
+    rects = load_rois(roi_file)
+    mask = _mask_from_rects(stack.shape[1:], rects)
+
+    stat_mode = cfg["processing"].get("stat_mode", "rms")
+    mean_frame = np.mean(stack, axis=0)
+    dsnu_map = mean_frame - np.mean(mean_frame[mask])
+    dsnu = _reduce(dsnu_map[mask], stat_mode)
+    read_noise_map = np.std(stack, axis=0)
+    read_noise = _reduce(read_noise_map[mask], stat_mode)
+    return dsnu, read_noise, dsnu_map, read_noise_map
+
+
+def calculate_dn_sat(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
+    """Detect DN_sat using multiple heuristics."""
+    p999 = float(np.percentile(flat_stack, 99.9))
+    sat_factor = cfg.get("illumination", {}).get("sat_factor", 0.95)
+    max_from_factor = float(np.max(flat_stack)) / max(sat_factor, 1e-6)
+    adc_bits = int(cfg.get("sensor", {}).get("adc_bits", 16))
+    adc_max = (1 << adc_bits) - 1
+    method3 = adc_max * 0.90
+    return max(p999, max_from_factor, method3)
+
+
+def calculate_dynamic_range_dn(dn_sat: float, read_noise: float) -> float:
+    if read_noise == 0:
+        return 0.0
+    return 20.0 * np.log10(dn_sat / read_noise)
+
+
+def calculate_pseudo_prnu(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> Tuple[float, np.ndarray]:
+    """Return (prnu_percent, residual_map)."""
+    mean_frame = np.mean(flat_stack, axis=0)
+    std_frame = np.std(flat_stack, axis=0)
+    stat_mode = cfg["processing"].get("stat_mode", "rms")
+    value = _reduce(std_frame, stat_mode) / max(mean_frame.mean(), 1e-6) * 100.0
+    return value, std_frame
