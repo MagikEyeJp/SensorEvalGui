@@ -23,13 +23,18 @@ def _auto_labels(ratios: Sequence[float]) -> list[str]:
 
 
 def plot_snr_vs_signal(signal: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any], output_path: Path):
-    """Plot SNR–Signal curve and save PNG."""
+    """Plot SNR–Signal curve (log–log) with ideal line and threshold."""
+    thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
+    thr_lin = 10 ** (thresh / 20.0)
     plt.figure()
-    plt.plot(signal, snr, marker="o", linestyle="-")
+    plt.loglog(signal, snr, marker="o", linestyle="-", label="Measured")
+    plt.loglog(signal, np.sqrt(signal), linestyle=":", label="Ideal √µ")
+    plt.axhline(thr_lin, color="r", linestyle="--", label=f"{thresh:g} dB")
     plt.xlabel("Signal (DN)")
     plt.ylabel("SNR")
     plt.title("SNR vs Signal")
-    plt.grid(True)
+    plt.grid(True, which="both")
+    plt.legend()
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()
@@ -44,13 +49,17 @@ def plot_snr_vs_exposure(exposure_ratios: np.ndarray, snr: np.ndarray, cfg: Dict
         labels = [ratio for ratio, _ in cfgutil.exposure_entries(cfg)]
     label_strs = _auto_labels(labels)
 
+    thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
+    thr_lin = 10 ** (thresh / 20.0)
     plt.figure()
-    plt.plot(exposure_ratios, snr, marker="s", linestyle="-")
+    plt.semilogx(exposure_ratios, snr, marker="s", linestyle="-", label="Measured")
+    plt.axhline(thr_lin, color="r", linestyle="--", label=f"{thresh:g} dB")
     plt.xticks(exposure_ratios, label_strs, rotation=45)
     plt.xlabel("Exposure Ratio")
     plt.ylabel("SNR")
     plt.title("SNR vs Exposure")
-    plt.grid(True)
+    plt.grid(True, which="both")
+    plt.legend()
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()

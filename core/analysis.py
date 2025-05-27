@@ -15,12 +15,15 @@ from core.loader import load_image_stack
 
 __all__ = [
     "extract_roi_stats",
+    "extract_roi_table",
     "calculate_snr_curve",
     "calculate_dynamic_range",
     "calculate_dark_noise",
     "calculate_dark_noise_gain",
     "calculate_dn_sat",
     "calculate_dynamic_range_dn",
+    "calculate_system_sensitivity",
+    "calculate_dn_at_snr",
     "calculate_pseudo_prnu",
 ]
 
@@ -74,6 +77,50 @@ def extract_roi_stats(project_dir: Path | str, cfg: Dict[str, Any]) -> Dict[Tupl
     return res
 
 
+def extract_roi_table(project_dir: Path | str, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Return list of ROI stats rows for csv output."""
+    project_dir = Path(project_dir)
+    chart_roi_file = project_dir / cfg["measurement"]["chart_roi_file"]
+    flat_roi_file = project_dir / cfg["measurement"]["flat_roi_file"]
+    chart_rects = load_rois(chart_roi_file)
+    flat_rects = load_rois(flat_roi_file)
+
+    debug_stacks = cfg["output"].get("debug_stacks", False)
+
+    rows: List[Dict[str, Any]] = []
+    for gain_db, gfold in cfgutil.gain_entries(cfg):
+        for ratio, efold in cfgutil.exposure_entries(cfg):
+            folder = project_dir / gfold / efold
+            if not folder.is_dir():
+                continue
+            stack = load_image_stack(folder)
+            if debug_stacks:
+                tifffile.imwrite(folder / "stack_cache.tiff", stack)
+
+            if "chart" in efold.lower():
+                roi_type = "grayscale"
+                rects = chart_rects
+            else:
+                roi_type = "flat"
+                rects = flat_rects
+            for i, r in enumerate(rects):
+                mask = _mask_from_rects(stack.shape[1:], [r])
+                pix = stack[:, mask]
+                mean = float(np.mean(pix))
+                std = float(np.std(pix))
+                snr_db = float("nan") if std == 0 else float(20 * np.log10(mean / std))
+                rows.append({
+                    "ROI Type": roi_type,
+                    "ROI No": i if roi_type == "grayscale" else "-",
+                    "Gain (dB)": gain_db,
+                    "Exposure": ratio,
+                    "Mean": mean,
+                    "Std": std,
+                    "SNR (dB)": snr_db,
+                })
+    return rows
+
+
 def calculate_snr_curve(signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
     with np.errstate(divide="ignore", invalid="ignore"):
         snr = np.where(noise == 0, np.nan, signal / noise)
@@ -99,6 +146,9 @@ def _reduce(values: np.ndarray, mode: str) -> float:
         return float(np.mean(values))
     if mode == "median":
         return float(np.median(values))
+    if mode == "mad":
+        med = np.median(values)
+        return float(np.median(np.abs(values - med)))
     raise ValueError(mode)
 
 
@@ -170,3 +220,31 @@ def calculate_pseudo_prnu(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> Tuple[
     stat_mode = cfg["processing"].get("stat_mode", "rms")
     value = _reduce(std_frame, stat_mode) / max(mean_frame.mean(), 1e-6) * 100.0
     return value, std_frame
+
+
+def calculate_system_sensitivity(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
+    """Return System Sensitivity (DN/µW·cm⁻²·s)."""
+    illum = cfg.get("illumination", {})
+    power = float(illum.get("power_uW_cm2", 1.0))
+    exposure_ms = float(illum.get("exposure_ms", 1.0))
+    denom = power * exposure_ms / 1000.0
+    if denom == 0:
+        return 0.0
+    mean_dn = float(np.mean(flat_stack))
+    return mean_dn / denom
+
+
+def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: float) -> float:
+    """Interpolate DN where SNR crosses threshold_dB."""
+    thr_lin = 10 ** (threshold_db / 20.0)
+    idx = np.where(snr_lin >= thr_lin)[0]
+    if idx.size == 0:
+        return float("nan")
+    if idx[0] == 0:
+        return float(signal[0])
+    x0, x1 = signal[idx[0]-1], signal[idx[0]]
+    y0, y1 = snr_lin[idx[0]-1], snr_lin[idx[0]]
+    if y1 == y0:
+        return float(x1)
+    r = (thr_lin - y0) / (y1 - y0)
+    return float(x0 + r * (x1 - x0))
