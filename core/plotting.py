@@ -15,6 +15,7 @@ from utils import config as cfgutil
 
 __all__ = [
     "plot_snr_vs_signal",
+    "plot_snr_vs_signal_multi",
     "plot_snr_vs_exposure",
     "plot_prnu_regression",
     "plot_heatmap",
@@ -52,6 +53,40 @@ def plot_snr_vs_signal(
     plt.figure()
     plt.loglog(signal, snr_db, marker="o", linestyle="-", label="Measured")
     plt.loglog(signal, 20 * np.log10(np.sqrt(signal)), linestyle=":", label="Ideal √µ")
+    plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
+    plt.xlabel("Signal (DN)")
+    plt.ylabel("SNR (dB)")
+    plt.title("SNR vs Signal")
+    plt.grid(True, which="both")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+
+
+def plot_snr_vs_signal_multi(
+    data: Dict[float, tuple[np.ndarray, np.ndarray]],
+    cfg: Dict[str, Any],
+    output_path: Path,
+):
+    """Plot SNR–Signal curves for multiple gains."""
+
+    thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
+    plt.figure()
+
+    all_signals = []
+    for gain, (sig, snr) in sorted(data.items()):
+        sig = _validate_positive_finite(sig, "signal")
+        snr = _validate_positive_finite(snr, "snr")
+        all_signals.append(sig)
+        snr_db = 20 * np.log10(snr)
+        plt.loglog(sig, snr_db, marker="o", linestyle="-", label=f"{gain:g}dB")
+
+    if all_signals:
+        concat = np.concatenate(all_signals)
+        xs = np.linspace(concat.min(), concat.max(), 200)
+        plt.loglog(xs, 20 * np.log10(np.sqrt(xs)), linestyle=":", label="Ideal √µ")
+
     plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
     plt.xlabel("Signal (DN)")
     plt.ylabel("SNR (dB)")

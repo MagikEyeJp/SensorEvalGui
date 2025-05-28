@@ -27,6 +27,7 @@ __all__ = [
     "calculate_dynamic_range_dn",
     "calculate_system_sensitivity",
     "collect_mid_roi_snr",
+    "collect_gain_snr_signal",
     "calculate_dn_at_snr",
     "calculate_snr_at_half",
     "calculate_dn_at_snr_one",
@@ -198,6 +199,35 @@ def collect_mid_roi_snr(
         items.sort(key=lambda x: x[0])
         r, s = zip(*items)
         res[gain] = (np.array(r), np.array(s))
+    return res
+
+
+def collect_gain_snr_signal(
+    stats: Dict[tuple[float, float], Dict[str, float]],
+) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
+    """Return SNR curves indexed by signal level for each gain.
+
+    Parameters
+    ----------
+    stats:
+        Mapping from ``(gain_db, exposure_ratio)`` to statistic dicts with
+        ``"mean"`` and ``"snr"`` values.
+
+    Returns
+    -------
+    Dict[float, tuple[np.ndarray, np.ndarray]]
+        Mapping of gain to arrays of signal levels and linear SNR values.
+    """
+
+    data: Dict[float, list[tuple[float, float]]] = {}
+    for (gain, _), vals in stats.items():
+        data.setdefault(gain, []).append((vals["mean"], vals["snr"]))
+
+    res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
+    for gain, items in data.items():
+        items.sort(key=lambda x: x[0])
+        sig, s = zip(*items)
+        res[gain] = (np.array(sig), np.array(s))
     return res
 
 

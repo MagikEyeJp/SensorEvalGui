@@ -53,13 +53,14 @@ from core.analysis import (
     calculate_dynamic_range_dn,
     calculate_system_sensitivity,
     collect_mid_roi_snr,
+    collect_gain_snr_signal,
     calculate_dn_at_snr,
     calculate_snr_at_half,
     calculate_dn_at_snr_one,
     calculate_pseudo_prnu,
 )
 from core.plotting import (
-    plot_snr_vs_signal,
+    plot_snr_vs_signal_multi,
     plot_snr_vs_exposure,
     plot_prnu_regression,
     plot_heatmap,
@@ -232,8 +233,9 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
             )
             exp_data = collect_mid_roi_snr(roi_table, mid_idx)
+            sig_data = collect_gain_snr_signal(stats)
 
-            plot_snr_vs_signal(signals, snr_lin, cfg, out_dir / "snr_signal.png")
+            plot_snr_vs_signal_multi(sig_data, cfg, out_dir / "snr_signal.png")
             plot_snr_vs_exposure(exp_data, cfg, out_dir / "snr_exposure.png")
             plot_prnu_regression(signals, noises, cfg, out_dir / "prnu_fit.png")
             plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
