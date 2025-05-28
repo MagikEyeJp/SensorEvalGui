@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, Any, Sequence
 
 import matplotlib
+
 matplotlib.use("Agg")  # avoid GUI backend so plotting works inside threads
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,7 +37,9 @@ def _auto_labels(ratios: Sequence[float]) -> list[str]:
     return [f"{r:g}×" for r in ratios]
 
 
-def plot_snr_vs_signal(signal: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any], output_path: Path):
+def plot_snr_vs_signal(
+    signal: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any], output_path: Path
+):
     """Plot SNR–Signal curve (log–log) with ideal line and threshold."""
     signal = _validate_positive_finite(signal, "signal")
     snr = _validate_positive_finite(snr, "snr")
@@ -45,13 +48,13 @@ def plot_snr_vs_signal(signal: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any],
         signal = np.asarray([signal[0] * 0.9, signal[0] * 1.1])
         snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
-    thr_lin = 10 ** (thresh / 20.0)
+    snr_db = 20 * np.log10(snr)
     plt.figure()
-    plt.loglog(signal, snr, marker="o", linestyle="-", label="Measured")
-    plt.loglog(signal, np.sqrt(signal), linestyle=":", label="Ideal √µ")
-    plt.axhline(thr_lin, color="r", linestyle="--", label=f"{thresh:g} dB")
+    plt.loglog(signal, snr_db, marker="o", linestyle="-", label="Measured")
+    plt.loglog(signal, 20 * np.log10(np.sqrt(signal)), linestyle=":", label="Ideal √µ")
+    plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
     plt.xlabel("Signal (DN)")
-    plt.ylabel("SNR")
+    plt.ylabel("SNR (dB)")
     plt.title("SNR vs Signal")
     plt.grid(True, which="both")
     plt.legend()
@@ -60,7 +63,11 @@ def plot_snr_vs_signal(signal: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any],
     plt.close()
 
 
-def plot_snr_vs_exposure(data: Dict[float, tuple[np.ndarray, np.ndarray]], cfg: Dict[str, Any], output_path: Path):
+def plot_snr_vs_exposure(
+    data: Dict[float, tuple[np.ndarray, np.ndarray]],
+    cfg: Dict[str, Any],
+    output_path: Path,
+):
     """Plot SNR–Exposure curves per gain."""
 
     plot_cfg = cfg.get("plot", {})
@@ -73,18 +80,18 @@ def plot_snr_vs_exposure(data: Dict[float, tuple[np.ndarray, np.ndarray]], cfg: 
     xticks = base_ms * np.array(labels)
 
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
-    thr_lin = 10 ** (thresh / 20.0)
 
     plt.figure()
     for gain, (ratios, snr) in sorted(data.items()):
         ratios = _validate_positive_finite(ratios, "exposure ratios")
         snr = _validate_positive_finite(snr, "snr")
+        snr_db = 20 * np.log10(snr)
         times = base_ms * ratios
-        plt.semilogx(times, snr, marker="s", linestyle="-", label=f"{gain:g} dB")
-    plt.axhline(thr_lin, color="r", linestyle="--", label=f"{thresh:g} dB")
+        plt.semilogx(times, snr_db, marker="s", linestyle="-", label=f"{gain:g} dB")
+    plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
     plt.xticks(xticks, label_strs, rotation=45)
     plt.xlabel("Exposure Time (ms)")
-    plt.ylabel("SNR")
+    plt.ylabel("SNR (dB)")
     plt.title("SNR vs Exposure")
     plt.grid(True, which="both")
     plt.legend()
@@ -93,7 +100,9 @@ def plot_snr_vs_exposure(data: Dict[float, tuple[np.ndarray, np.ndarray]], cfg: 
     plt.close()
 
 
-def plot_prnu_regression(means: np.ndarray, stds: np.ndarray, cfg: Dict[str, Any], output_path: Path):
+def plot_prnu_regression(
+    means: np.ndarray, stds: np.ndarray, cfg: Dict[str, Any], output_path: Path
+):
     """Plot PRNU regression (std vs mean) with LS or WLS fit."""
     plt.figure()
     plt.scatter(means, stds, s=8, alpha=0.6)
