@@ -24,11 +24,14 @@ def load_rois(zip_path: Path | str) -> List[Rect]:
         rz = [rz]
     for r in rz:
         l, t = int(r.left), int(r.top)
-        w = int(getattr(r, "width", r.right - r.left))
-        h = int(getattr(r, "height", r.bottom - r.top))
-        rects.append((l, t, w, h))
+        width = getattr(r, "width", None)
+        if width is None:
+            width = getattr(r, "right", 0) - getattr(r, "left", 0)
+        height = getattr(r, "height", None)
+        if height is None:
+            height = getattr(r, "bottom", 0) - getattr(r, "top", 0)
+        rects.append((l, t, int(width), int(height)))
     if not rects:
         raise ValueError(f"Invalid ROI file: {path}")
     # print(f"ROI count: {len(rects)}, {rects}")
     return rects
-

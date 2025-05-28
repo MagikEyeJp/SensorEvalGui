@@ -148,8 +148,12 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                         out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack
                     )
                 prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg, flat_rects)
+                gain_mult = cfgutil.gain_ratio(gain_db)
                 sens = calculate_system_sensitivity(
-                    flat_stack, cfg, flat_rects, ratio=1.0
+                    flat_stack,
+                    cfg,
+                    flat_rects,
+                    ratio=1.0 / gain_mult,
                 )
                 if first:
                     dsnu_map, rn_map, prnu_map = dsnu_map_tmp, rn_map_tmp, prnu_map_tmp

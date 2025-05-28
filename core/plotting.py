@@ -73,7 +73,10 @@ def plot_snr_vs_exposure(
     plot_cfg = cfg.get("plot", {})
     labels = plot_cfg.get("exposures")
     if labels is None:
-        labels = [ratio for ratio, _ in cfgutil.exposure_entries(cfg)]
+        try:
+            labels = [ratio for ratio, _ in cfgutil.exposure_entries(cfg)]
+        except KeyError:
+            labels = []
     label_strs = _auto_labels(labels)
 
     base_ms = float(cfg.get("illumination", {}).get("exposure_ms", 1.0))
