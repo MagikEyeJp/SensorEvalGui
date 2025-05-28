@@ -67,6 +67,8 @@ def save_summary_txt(
         lines = _meta_lines(cfg)
         adc_bits = int(cfg.get("sensor", {}).get("adc_bits", 0))
         lsb_shift = int(cfg.get("sensor", {}).get("lsb_shift", 0))
+        lines.append(f"ADC Bits: {adc_bits}")
+        lines.append(f"LSB Shift: {lsb_shift}")
         if adc_bits > 0:
             full_scale = ((1 << adc_bits) - 1) * (1 << lsb_shift)
             lines.append(f"ADC Full Scale (DN): {full_scale}")
@@ -74,10 +76,10 @@ def save_summary_txt(
 
         if summary:
             metrics = sorted({m for g in summary.values() for m in g})
-            header = ["Metric"] + [f"{g:.0f} dB" for g in sorted(summary)]
+            header = [f"{'Metric':20}"] + [f"{g:.0f} dB" for g in sorted(summary)]
             lines.append("\t".join(header))
             for key in metrics:
-                row = [key]
+                row = [f"{key:20}"]
                 for gain in sorted(summary):
                     val = summary[gain].get(key, float("nan"))
                     if isinstance(val, (int, float)):
