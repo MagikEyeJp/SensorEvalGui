@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Tuple, Any, List
 import os
+import logging
 
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
@@ -83,7 +84,11 @@ def extract_roi_stats(
         for ratio, efold in cfgutil.exposure_entries(cfg):
             folder = project_dir / gfold / efold
             if not folder.is_dir():
+                logging.info("Skipping missing folder: %s", folder)
                 continue
+            logging.info(
+                "Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio
+            )
             stack = load_image_stack(folder)
             if debug_stacks:
                 tifffile.imwrite(folder / "stack_cache.tiff", stack)
@@ -94,13 +99,26 @@ def extract_roi_stats(
             mean = float(np.mean(pix))
             std = float(np.std(pix))
             if std == 0:
+                logging.info("Skip due to zero std: %s", folder)
                 continue
             if mean < min_sig_factor * std:
+                logging.info(
+                    "Skip due to low signal: mean %.2f < %.2f × %.2f",
+                    mean,
+                    min_sig_factor,
+                    std,
+                )
                 continue
             snr = mean / std
             if excl_low_snr and snr < snr_thresh:
+                logging.info(
+                    "Skip due to low SNR: %.2f dB < %.2f dB",
+                    20 * np.log10(snr),
+                    snr_thresh,
+                )
                 continue
             res[(gain_db, ratio)] = {"mean": mean, "std": std, "snr": snr}
+    logging.info("Collected %d ROI stats", len(res))
     return res
 
 
