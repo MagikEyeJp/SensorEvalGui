@@ -79,6 +79,10 @@ def _lookup_nested(d: Dict[str, Any], key: float | int) -> Dict[str, Any]:
         return d[key]
     if int(key) in d:
         return d[int(key)]
+    int_key = int(key)
+    str_int = str(int_key)
+    if str_int in d:
+        return d[str_int]
     str_key = str(key)
     if str_key in d:
         return d[str_key]
