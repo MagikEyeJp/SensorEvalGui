@@ -221,15 +221,16 @@ def collect_mid_roi_snr(
 
 
 def collect_gain_snr_signal(
-    stats: Dict[tuple[float, float], Dict[str, float]],
+    rows: List[Dict[str, Any]], cfg: Dict[str, Any]
 ) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
-    """Return SNR curves indexed by signal level for each gain.
+    """Return SNR curves indexed by signal level for each gain using ROI rows.
 
     Parameters
     ----------
-    stats:
-        Mapping from ``(gain_db, exposure_ratio)`` to statistic dicts with
-        ``"mean"`` and ``"snr"`` values.
+    rows:
+        ROI table rows from :func:`extract_roi_table`.
+    cfg:
+        Parsed configuration dictionary controlling filtering.
 
     Returns
     -------
@@ -237,9 +238,23 @@ def collect_gain_snr_signal(
         Mapping of gain to arrays of signal levels and linear SNR values.
     """
 
+    snr_thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
+    min_sig_factor = cfg.get("processing", {}).get("min_sig_factor", 3.0)
+    excl_low = cfg.get("processing", {}).get("exclude_abnormal_snr", True)
+
     data: Dict[float, list[tuple[float, float]]] = {}
-    for (gain, _), vals in stats.items():
-        data.setdefault(gain, []).append((vals["mean"], vals["snr"]))
+    for row in rows:
+        mean = float(row.get("Mean", 0.0))
+        std = float(row.get("Std", 0.0))
+        if std == 0:
+            continue
+        if mean < min_sig_factor * std:
+            continue
+        snr = mean / std
+        if excl_low and 20 * np.log10(snr) < snr_thresh:
+            continue
+        gain = float(row.get("Gain (dB)", 0.0))
+        data.setdefault(gain, []).append((mean, snr))
 
     res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
     for gain, items in data.items():

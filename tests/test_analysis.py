@@ -75,3 +75,30 @@ def test_calculate_system_sensitivity_ratio():
     cfg = {"illumination": {"power_uW_cm2": 100.0, "exposure_ms": 50}}
     sens = analysis.calculate_system_sensitivity(stack, cfg, ratio=2.0)
     assert pytest.approx(sens, abs=1e-6) == 200.0 / (100.0 * 50 * 2.0 / 1000.0)
+
+
+def test_collect_gain_snr_signal_rows():
+    rows = [
+        {
+            "ROI Type": "grayscale",
+            "ROI No": 0,
+            "Gain (dB)": 0.0,
+            "Exposure": 1.0,
+            "Mean": 10.0,
+            "Std": 1.0,
+        },
+        {
+            "ROI Type": "flat",
+            "ROI No": "-",
+            "Gain (dB)": 0.0,
+            "Exposure": 1.0,
+            "Mean": 20.0,
+            "Std": 2.0,
+        },
+    ]
+    cfg = {"processing": {"exclude_abnormal_snr": False, "min_sig_factor": 0}}
+    data = analysis.collect_gain_snr_signal(rows, cfg)
+    assert 0.0 in data
+    sig, snr = data[0.0]
+    assert np.allclose(sig, [10.0, 20.0])
+    assert np.allclose(snr, [10.0, 10.0])
