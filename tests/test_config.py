@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import tempfile
 from pathlib import Path
 import pytest
