@@ -35,11 +35,18 @@ This project aims to:
 
 ## 📦 Dependencies
 
+Create an isolated Python environment and install the project by running the
+included setup script:
+
 ```bash
-pip install numpy pandas tifffile matplotlib PySide6
+scripts/setup_env.sh
+```
+
+This creates a `.venv` directory and installs the package in editable mode with
+its development dependencies (including `pytest`).
 
 Optional:
-	•	pyqtgraph for ROI/pixel image interaction (future feature)
+        •       pyqtgraph for ROI/pixel image interaction (future feature)
 
 Tested on:
 	•	Python 3.10+
