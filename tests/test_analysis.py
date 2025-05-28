@@ -75,3 +75,12 @@ def test_calculate_system_sensitivity_ratio():
     cfg = {"illumination": {"power_uW_cm2": 100.0, "exposure_ms": 50}}
     sens = analysis.calculate_system_sensitivity(stack, cfg, ratio=2.0)
     assert pytest.approx(sens, abs=1e-6) == 200.0 / (100.0 * 50 * 2.0 / 1000.0)
+
+
+def test_calculate_system_sensitivity_gain():
+    stack = np.full((1, 2, 2), 100, dtype=np.uint16)
+    cfg = {"illumination": {"power_uW_cm2": 50.0, "exposure_ms": 20}}
+    ratio = 1.0 / (2 ** (6.0 / 6.0))
+    sens = analysis.calculate_system_sensitivity(stack, cfg, ratio=ratio)
+    expect = 100.0 / (50.0 * 20 * ratio / 1000.0)
+    assert pytest.approx(sens, abs=1e-6) == expect
