@@ -67,6 +67,9 @@ python main.py
         •       📌 Metrics include SNR @ 50% and DN @ SNR=1 (0 dB)
         •       📑 roi_stats.csv: Per-condition stats
 
+For a comprehensive description of each output file, refer to
+[Sensor_Output_Spec.md](Sensor_Output_Spec.md).
+
 ##🔮 Planned Features
 
 	•	ROI/pixel mode switching in GUI
