@@ -362,6 +362,8 @@ class MainWindow(QMainWindow):
 
         self.summary_view = QTextEdit()
         self.summary_view.setReadOnly(True)
+        self.summary_view.setLineWrapMode(QTextEdit.NoWrap)
+        self.summary_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         self.graph_tabs = QTabWidget()
 
@@ -480,15 +482,22 @@ class MainWindow(QMainWindow):
         ax.set_axis_off()
         canvas = FigureCanvas(fig)
         canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        h, w = img.shape[:2]
+        canvas.setMinimumSize(w, h)
         self.canvases.append(canvas)
         toolbar = NavigationToolbar2QT(canvas, None)
-        w = QWidget()
+
+        w_container = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(toolbar)
         layout.addWidget(canvas)
-        w.setLayout(layout)
-        return w
+        w_container.setLayout(layout)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(w_container)
+        return scroll
 
     def _clear_canvases(self) -> None:
         """Close and delete existing matplotlib canvases."""

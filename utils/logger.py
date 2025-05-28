@@ -4,6 +4,7 @@ from typing import Optional
 
 try:
     import psutil  # type: ignore
+
     _HAS_PSUTIL = True
 except Exception:
     psutil = None  # type: ignore
@@ -29,8 +30,7 @@ def log_memory_usage(prefix: str = "") -> None:
         return
     try:
         process = psutil.Process()
-        mem_mb = process.memory_info().rss / 1024 ** 2
+        mem_mb = process.memory_info().rss / 1024**2
         logging.info("%sMemory usage: %.2f MB", prefix, mem_mb)
     except Exception as exc:
         logging.debug("Failed to log memory usage: %s", exc)
-
