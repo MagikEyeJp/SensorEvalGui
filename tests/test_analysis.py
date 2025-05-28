@@ -156,3 +156,100 @@ def test_extract_roi_stats_mid_index(tmp_path):
     res = stats[(0.0, 1.0)]
     assert pytest.approx(res["mean"], abs=1e-6) == 20.5
     assert pytest.approx(res["std"], abs=1e-6) == 0.5
+
+
+def test_extract_roi_stats_temporal_std(tmp_path):
+    sys.modules["roifile"] = types.SimpleNamespace(roiread=_roiread)
+    importlib.reload(roi)
+    importlib.reload(analysis)
+
+    project = tmp_path
+    stack = np.array(
+        [
+            [[1, 2], [3, 4]],
+            [[5, 6], [7, 8]],
+        ],
+        dtype=np.uint16,
+    )
+    gain_dir = project / "gain_0dB" / "chart_1x"
+    gain_dir.mkdir(parents=True)
+    for i, frame in enumerate(stack):
+        tifffile.imwrite(gain_dir / f"frame{i}.tiff", frame)
+
+    roi_file = project / "roi.roi"
+    roi_file.write_text("dummy")
+
+    cfg_data = {
+        "measurement": {
+            "gains": {0: {"folder": "gain_0dB"}},
+            "exposures": {1.0: {"folder": "chart_1x"}},
+            "chart_roi_file": str(roi_file),
+            "flat_roi_file": str(roi_file),
+        },
+        "processing": {
+            "stat_mode": "mean",
+            "min_sig_factor": 0,
+            "exclude_abnormal_snr": False,
+        },
+    }
+    cfg_file = project / "config.yaml"
+    with cfg_file.open("w") as fh:
+        import yaml
+
+        yaml.safe_dump(cfg_data, fh)
+
+    cfg = load_config(cfg_file)
+    stats = analysis.extract_roi_stats(project, cfg)
+    res = stats[(0.0, 1.0)]
+    assert pytest.approx(res["mean"], abs=1e-6) == 4.5
+    assert pytest.approx(res["std"], abs=1e-6) == 2.0
+    assert pytest.approx(res["snr"], abs=1e-6) == 2.25
+
+
+def test_extract_roi_table_temporal_std(tmp_path):
+    sys.modules["roifile"] = types.SimpleNamespace(roiread=_roiread)
+    importlib.reload(roi)
+    importlib.reload(analysis)
+
+    project = tmp_path
+    stack = np.array(
+        [
+            [[1, 2], [3, 4]],
+            [[5, 6], [7, 8]],
+        ],
+        dtype=np.uint16,
+    )
+    gain_dir = project / "gain_0dB" / "chart_1x"
+    gain_dir.mkdir(parents=True)
+    for i, frame in enumerate(stack):
+        tifffile.imwrite(gain_dir / f"frame{i}.tiff", frame)
+
+    roi_file = project / "roi.roi"
+    roi_file.write_text("dummy")
+
+    cfg_data = {
+        "measurement": {
+            "gains": {0: {"folder": "gain_0dB"}},
+            "exposures": {1.0: {"folder": "chart_1x"}},
+            "chart_roi_file": str(roi_file),
+            "flat_roi_file": str(roi_file),
+        },
+        "processing": {
+            "stat_mode": "mean",
+            "min_sig_factor": 0,
+            "exclude_abnormal_snr": False,
+        },
+    }
+    cfg_file = project / "config.yaml"
+    with cfg_file.open("w") as fh:
+        import yaml
+
+        yaml.safe_dump(cfg_data, fh)
+
+    cfg = load_config(cfg_file)
+    rows = analysis.extract_roi_table(project, cfg)
+    assert len(rows) == 1
+    row = rows[0]
+    assert pytest.approx(row["Mean"], abs=1e-6) == 4.5
+    assert pytest.approx(row["Std"], abs=1e-6) == 2.0
+    assert pytest.approx(row["SNR (dB)"], abs=1e-6) == 20 * np.log10(2.25)
