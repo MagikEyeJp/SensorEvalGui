@@ -5,7 +5,14 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 
-from utils.config import load_config, gain_entries, gain_ratio, _lookup_nested
+from utils.config import (
+    load_config,
+    gain_entries,
+    gain_ratio,
+    _lookup_nested,
+    nearest_gain,
+    nearest_exposure,
+)
 
 
 def test_load_config_merges_defaults(tmp_path):
@@ -61,3 +68,14 @@ def test_lookup_nested_str_int_key():
     cfg = {"measurement": {"gains": {"0": {"folder": "g0"}}}}
     entries = gain_entries(cfg)
     assert _lookup_nested(cfg["measurement"]["gains"], 0.0)["folder"] == "g0"
+
+
+def test_nearest_gain_exposure():
+    cfg = {
+        "measurement": {
+            "gains": {"0": {"folder": "g0"}, "6": {"folder": "g6"}},
+            "exposures": {"1.0": {"folder": "e1"}, "4.0": {"folder": "e4"}},
+        }
+    }
+    assert nearest_gain(cfg, 2.0) == 0.0
+    assert nearest_exposure(cfg, 2.0) == 1.0

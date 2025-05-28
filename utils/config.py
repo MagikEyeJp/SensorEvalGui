@@ -14,6 +14,8 @@ __all__ = [
     "find_gain_folder",
     "find_exposure_folder",
     "gain_ratio",
+    "nearest_gain",
+    "nearest_exposure",
 ]
 
 # ────────────────────────────────────────────────
@@ -110,3 +112,21 @@ def gain_ratio(gain_db: float) -> float:
     """Return linear gain ratio from decibel value."""
 
     return 10 ** (float(gain_db) / 20.0)
+
+
+def nearest_gain(cfg: Dict[str, Any], target: float) -> float:
+    """Return gain value in config closest to ``target``."""
+
+    gains = [g for g, _ in gain_entries(cfg)]
+    if not gains:
+        raise ValueError("No gains defined")
+    return min(gains, key=lambda g: abs(g - float(target)))
+
+
+def nearest_exposure(cfg: Dict[str, Any], target: float) -> float:
+    """Return exposure ratio in config closest to ``target``."""
+
+    ratios = [r for r, _ in exposure_entries(cfg)]
+    if not ratios:
+        raise ValueError("No exposures defined")
+    return min(ratios, key=lambda r: abs(r - float(target)))
