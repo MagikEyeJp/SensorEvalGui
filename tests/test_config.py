@@ -5,7 +5,7 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 
-from utils.config import load_config, gain_entries, gain_ratio
+from utils.config import load_config, gain_entries, gain_ratio, _lookup_nested
 
 
 def test_load_config_merges_defaults(tmp_path):
@@ -55,3 +55,9 @@ def test_gain_entries_sorted():
 def test_gain_ratio_conversion():
     assert gain_ratio(0.0) == 1.0
     assert pytest.approx(gain_ratio(6.0), abs=1e-6) == 10 ** (6.0 / 20.0)
+
+
+def test_lookup_nested_str_int_key():
+    cfg = {"measurement": {"gains": {"0": {"folder": "g0"}}}}
+    entries = gain_entries(cfg)
+    assert _lookup_nested(cfg["measurement"]["gains"], 0.0)["folder"] == "g0"
