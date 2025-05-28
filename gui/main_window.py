@@ -148,7 +148,9 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                         out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack
                     )
                 prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg, flat_rects)
-                sens = calculate_system_sensitivity(flat_stack, cfg, flat_rects)
+                sens = calculate_system_sensitivity(
+                    flat_stack, cfg, flat_rects, ratio=1.0
+                )
                 if first:
                     dsnu_map, rn_map, prnu_map = dsnu_map_tmp, rn_map_tmp, prnu_map_tmp
                     dn_sat = calculate_dn_sat(flat_stack, cfg)
