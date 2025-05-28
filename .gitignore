@@ -26,3 +26,6 @@ set_env_vars.sh
 
 project/
 venv
+
+# IDE
+.vscode/
