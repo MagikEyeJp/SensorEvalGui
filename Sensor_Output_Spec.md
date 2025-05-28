@@ -9,7 +9,7 @@
 * 評価日、評価環境
 * ゲインリスト：\[0dB, 6dB, 12dB, 24dB] # <- 6dBおきに取った方望ましいため18dBも追加
 * 露光倍率リスト：\[1/16, 1/8, 1/4, 1/2, 1, 2, 4]
-* ADCのbit数など: ADC_bits, ADC_shift, ADC_FullScaleDN
+* ADCのbit数,シフト数,フルスケール: ADC_bits, ADC_shift, ADC_FullScaleDN = ((2^ADC_bits)-1) * 2^ADC_shift
 * 各条件における画像枚数（例：10）
 * 各種設定 (後述)
 
@@ -33,6 +33,7 @@ Gainごとに下記画像セットを入力とする。それぞれ10枚以上�
 
 #### 1. `summary.txt'
 センサ共通メタ情報、測定条件を先頭に出力
+
 Gainごとに下記項目を出力
 
 * **System Sensitivity (DN / μW·cm⁻²·s)**：フラット画像(各露光条件) のフラットROIの平均DNを、照度 power_uW_cm2（μW/cm²）×露光時間 exposure_ms（ms）x 露光倍率 で割って計算する。
@@ -56,9 +57,8 @@ Gainごとに下記項目を出力
   * 差分法との切替（将来対応）：config.processing.read\_noise\_mode == 2 などで分岐予定
 * **DN\_sat (飽和DN)**：以下3方式の最大を採用：
 
-  1. フラット画像スタックの 99.9 パーセンタイル値
-  2. 最大DN値 / config.reference.sat\_factor
-  3. ADC最大値 × 0.90（将来config化）
+  1. フラット画像ROIの最大輝度ドットの 99.9 パーセンタイル値
+  2. ADC_FullScaleDN * config.reference.sat\_factor
 * **Dynamic Range (dB)**：最大信号値として DN\_sat を用い、Read Noise (DN) との比から 20\*log10(DN\_sat / Noise) を算出。
 * **SNR @ 50%**：グレースケールチャートまたはフラット画像で、Full-Wellの50%（例：32768 DN）に最も近いμとSNRの系列から、補間または回帰により推定して算出。
   * DN\_satの基準：config.reference.sat\_factor
@@ -275,6 +275,7 @@ project_IMX273/                ← ここを “プロジェクトフォルダ�
  * Summaryとグラフを表示したあと、ウィンドウの横幅をグラフの大きさに合わせて自動リサイズ。その時Summary表示エリアとグラフ表示エリアの間のSplitterは、位置の初期値を高さの比率が1:3くらいにする
  * 出力フォルダの中身がすでにあった場合、各ファイルは上書きする
  * コマンドラインでprojectフォルダを指定すると、起動してすぐそのフォルダを読み込んで計算を始める
+
 
 ---
 ### 📌 特記事項
