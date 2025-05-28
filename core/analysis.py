@@ -19,6 +19,7 @@ from core.loader import load_image_stack
 
 __all__ = [
     "extract_roi_stats",
+    "extract_roi_stats_gainmap",
     "extract_roi_table",
     "calculate_snr_curve",
     "calculate_dynamic_range",
@@ -29,6 +30,7 @@ __all__ = [
     "calculate_system_sensitivity",
     "collect_mid_roi_snr",
     "collect_gain_snr_signal",
+    "collect_prnu_points",
     "calculate_dn_at_snr",
     "calculate_snr_at_half",
     "calculate_dn_at_snr_one",
@@ -128,6 +130,102 @@ def extract_roi_stats(
                 continue
             res[(gain_db, ratio)] = {"mean": mean, "std": std, "snr": snr}
     logging.info("Collected %d ROI stats", len(res))
+    return res
+
+
+def extract_roi_stats_gainmap(
+    project_dir: Path | str, cfg: Dict[str, Any]
+) -> Dict[Tuple[float, float], Dict[str, float]]:
+    """Compute ROI stats with gain-map correction applied."""
+    project_dir = Path(project_dir)
+    res: Dict[Tuple[float, float], Dict[str, float]] = {}
+
+    chart_roi_file = project_dir / cfg["measurement"]["chart_roi_file"]
+    flat_roi_file = project_dir / cfg["measurement"]["flat_roi_file"]
+    chart_rects = load_rois(chart_roi_file)
+    flat_rects = load_rois(flat_roi_file)
+
+    mid_idx = cfg.get("reference", {}).get(
+        "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
+    )
+
+    snr_thresh = cfg["processing"].get("snr_threshold_dB", 10.0)
+    min_sig_factor = cfg["processing"].get("min_sig_factor", 3.0)
+    excl_low_snr = cfg["processing"].get("exclude_abnormal_snr", True)
+    debug_stacks = cfg["output"].get("debug_stacks", False)
+    order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
+
+    def _fit_gain(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
+        if order <= 0:
+            c = float(np.mean(frame[mask]))
+            return np.full_like(frame, c)
+        y, x = np.indices(frame.shape)
+        xm, ym = x[mask].ravel(), y[mask].ravel()
+        z = frame[mask].ravel()
+        cols = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols.append((xm**i) * (ym**j))
+        A = np.vstack(cols).T
+        coef, *_ = np.linalg.lstsq(A, z, rcond=None)
+        cols_full = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols_full.append((x**i) * (y**j))
+        A_full = np.stack(cols_full, axis=0)
+        fitted = np.tensordot(coef, A_full, axes=(0, 0))
+        return fitted
+
+    for gain_db, gfold in cfgutil.gain_entries(cfg):
+        for ratio, efold in cfgutil.exposure_entries(cfg):
+            folder = project_dir / gfold / efold
+            if not folder.is_dir():
+                logging.info("Skipping missing folder: %s", folder)
+                continue
+            logging.info(
+                "Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio
+            )
+            stack = load_image_stack(folder)
+            if debug_stacks:
+                tifffile.imwrite(folder / "stack_cache.tiff", stack)
+
+            mean_frame = np.mean(stack, axis=0)
+            mask_fit = _mask_from_rects(stack.shape[1:], flat_rects)
+            gain_map = _fit_gain(mean_frame, mask_fit, order)
+            gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+            corrected = stack / gain_map
+
+            rects = chart_rects if "chart" in efold.lower() else flat_rects
+            idx = mid_idx if "chart" in efold.lower() else 0
+            if idx >= len(rects):
+                idx = 0
+            mask = _mask_from_rects(stack.shape[1:], [rects[idx]])
+            pix = corrected[:, mask]
+            stat_mode = cfg["processing"].get("stat_mode", "rms")
+            mean = float(np.mean(pix))
+            noise_pix = np.std(pix, axis=0)
+            std = float(_reduce(noise_pix, stat_mode))
+            if std == 0:
+                logging.info("Skip due to zero std: %s", folder)
+                continue
+            if mean < min_sig_factor * std:
+                logging.info(
+                    "Skip due to low signal: mean %.2f < %.2f × %.2f",
+                    mean,
+                    min_sig_factor,
+                    std,
+                )
+                continue
+            snr = mean / std
+            if excl_low_snr and snr < snr_thresh:
+                logging.info(
+                    "Skip due to low SNR: %.2f dB < %.2f dB",
+                    20 * np.log10(snr),
+                    snr_thresh,
+                )
+                continue
+            res[(gain_db, ratio)] = {"mean": mean, "std": std, "snr": snr}
+    logging.info("Collected %d ROI stats (gain-corrected)", len(res))
     return res
 
 
@@ -272,6 +370,27 @@ def collect_gain_snr_signal(
         items.sort(key=lambda x: x[0])
         sig, s = zip(*items)
         res[gain] = (np.array(sig), np.array(s))
+    return res
+
+
+def collect_prnu_points(
+    stats: Dict[tuple[float, float], Dict[str, float]],
+) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
+    """Return mean/std arrays per gain for PRNU regression."""
+
+    data: Dict[float, list[tuple[float, float]]] = {}
+    for (gain, _), vals in stats.items():
+        std = float(vals.get("std", 0.0))
+        if std == 0:
+            continue
+        mean = float(vals.get("mean", 0.0))
+        data.setdefault(gain, []).append((mean, std))
+
+    res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
+    for gain, items in data.items():
+        items.sort(key=lambda x: x[0])
+        m, s = zip(*items)
+        res[gain] = (np.array(m), np.array(s))
     return res
 
 
