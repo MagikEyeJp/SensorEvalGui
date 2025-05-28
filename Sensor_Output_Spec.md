@@ -105,9 +105,9 @@ GUI上、および出力画像として出力
 
 * `snr_signal.png`：SNR vs Mean Signal（log-log軸）
   * 横軸：ROI平均信号（DN）
-  * 対象：Flat画像と Graychart画像の両方のROIを使用してμ-SNR系列を構成
+  * 対象：Flat画像と グレーチャート画像の両方のROIを使用してμ-SNR系列を構成
   * 縦軸：SNR（dB）
-  * 系列：露光倍率で色分け、ゲインで重ね描き
+  * 系列：Gainごと色分け
   * 補助線：理想曲線（√μ）、SNR=10dBライン
 
 * `snr_exposure.png`：SNR vs Exposure Time（中間階調）
