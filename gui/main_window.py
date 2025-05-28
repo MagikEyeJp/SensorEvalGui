@@ -70,7 +70,7 @@ from core.plotting import (
 )
 from utils.roi import load_rois
 from core.report_gen import save_summary_txt, report_csv, report_html
-from core.loader import load_image_stack
+from core.loader import load_image_stack, load_first_frame
 from typing import Callable, Optional
 
 
