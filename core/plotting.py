@@ -21,8 +21,10 @@ __all__ = [
 
 
 def _validate_positive_finite(arr: np.ndarray, name: str) -> np.ndarray:
-    """Return *arr* if all values are finite and >0 else raise ValueError."""
+    """Return ``arr`` if it is non-empty, finite and strictly positive."""
     arr = np.asarray(arr)
+    if arr.size == 0:
+        raise ValueError(f"{name} is empty")
     if not np.all(np.isfinite(arr)):
         raise ValueError(f"{name} contains non-finite values")
     if np.any(arr <= 0):
@@ -38,6 +40,10 @@ def plot_snr_vs_signal(signal: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any],
     """Plot SNR–Signal curve (log–log) with ideal line and threshold."""
     signal = _validate_positive_finite(signal, "signal")
     snr = _validate_positive_finite(snr, "snr")
+    if signal.size == 1 or snr.size == 1:
+        # Avoid singular log scale when only one sample is present
+        signal = np.asarray([signal[0] * 0.9, signal[0] * 1.1])
+        snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
     thr_lin = 10 ** (thresh / 20.0)
     plt.figure()
