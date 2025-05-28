@@ -20,6 +20,22 @@ def test_plot_snr_vs_exposure_invalid(tmp_path):
 
 
 def test_plot_snr_vs_signal_single_point(tmp_path):
-    plotting.plot_snr_vs_signal(np.array([1.0]), np.array([2.0]), {}, tmp_path / "out.png")
+    plotting.plot_snr_vs_signal(
+        np.array([1.0]), np.array([2.0]), {}, tmp_path / "out.png"
+    )
     assert (tmp_path / "out.png").is_file()
 
+
+def test_plot_snr_vs_signal_multi(tmp_path):
+    data = {
+        0.0: (np.array([1.0, 2.0]), np.array([2.0, 4.0])),
+        6.0: (np.array([1.5, 3.0]), np.array([1.0, 2.0])),
+    }
+    plotting.plot_snr_vs_signal_multi(data, {}, tmp_path / "multi.png")
+    assert (tmp_path / "multi.png").is_file()
+
+
+def test_plot_snr_vs_signal_multi_invalid(tmp_path):
+    data = {0.0: (np.array([1.0]), np.array([-1.0]))}
+    with pytest.raises(ValueError):
+        plotting.plot_snr_vs_signal_multi(data, {}, tmp_path / "bad.png")
