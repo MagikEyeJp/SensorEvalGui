@@ -17,3 +17,8 @@ def test_plot_snr_vs_exposure_invalid(tmp_path):
     with pytest.raises(ValueError):
         plotting.plot_snr_vs_exposure(data, {}, tmp_path / "out.png")
 
+
+def test_plot_snr_vs_signal_single_point(tmp_path):
+    plotting.plot_snr_vs_signal(np.array([1.0]), np.array([2.0]), {}, tmp_path / "out.png")
+    assert (tmp_path / "out.png").is_file()
+
