@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
 )
 from PySide6.QtGui import QPixmap
-from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtCore import QThread, Signal, Qt, QTimer
 
 from matplotlib.backends.backend_qtagg import (
     FigureCanvasQTAgg as FigureCanvas,
@@ -129,14 +129,24 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             first = True
             for gain_db, _ in cfgutil.gain_entries(cfg):
                 logging.info("Processing gain %.1f dB", gain_db)
-                dsnu, rn, dsnu_map_tmp, rn_map_tmp = calculate_dark_noise_gain(project, gain_db, cfg)
-                flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get("flat_lens_folder", "flat")
+                dsnu, rn, dsnu_map_tmp, rn_map_tmp = calculate_dark_noise_gain(
+                    project, gain_db, cfg
+                )
+                flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg[
+                    "measurement"
+                ].get("flat_lens_folder", "flat")
                 flat_stack = load_image_stack(flat_folder)
                 if debug_stacks and first:
-                    dark_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get("dark_folder", "dark")
+                    dark_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg[
+                        "measurement"
+                    ].get("dark_folder", "dark")
                     dark_stack = load_image_stack(dark_folder)
-                    tifffile.imwrite(out_dir / f"dark_cache_{int(gain_db)}dB.tiff", dark_stack)
-                    tifffile.imwrite(out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack)
+                    tifffile.imwrite(
+                        out_dir / f"dark_cache_{int(gain_db)}dB.tiff", dark_stack
+                    )
+                    tifffile.imwrite(
+                        out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack
+                    )
                 prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg, flat_rects)
                 sens = calculate_system_sensitivity(flat_stack, cfg, flat_rects)
                 if first:
@@ -145,12 +155,19 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                     first = False
 
                 # SNR metrics for this gain
-                tuples_g = sorted((kv for kv in stats.items() if kv[0][0] == gain_db), key=lambda kv: kv[1]["mean"])
+                tuples_g = sorted(
+                    (kv for kv in stats.items() if kv[0][0] == gain_db),
+                    key=lambda kv: kv[1]["mean"],
+                )
                 if tuples_g:
                     sig_g = np.array([kv[1]["mean"] for kv in tuples_g])
                     noise_g = np.array([kv[1]["std"] for kv in tuples_g])
                     snr_lin_g = sig_g / noise_g
-                    dn_at_10_g = calculate_dn_at_snr(sig_g, snr_lin_g, cfg["processing"].get("snr_threshold_dB", 10.0))
+                    dn_at_10_g = calculate_dn_at_snr(
+                        sig_g,
+                        snr_lin_g,
+                        cfg["processing"].get("snr_threshold_dB", 10.0),
+                    )
                     snr_at_50_g = calculate_snr_at_half(sig_g, snr_lin_g, dn_sat)
                     dn_at_0_g = calculate_dn_at_snr_one(sig_g, snr_lin_g)
                 else:
@@ -180,9 +197,11 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             dsnu = float(np.mean(dsnu_list)) if dsnu_list else 0.0
             read_noise = float(np.mean(rn_list)) if rn_list else 0.0
             dyn_range = calculate_dynamic_range_dn(dn_sat, read_noise)
-            prnu = float(np.mean(prnu_list)) if prnu_list else float('nan')
-            system_sens = float(np.mean(sens_list)) if sens_list else float('nan')
-            dn_at_10 = calculate_dn_at_snr(signals, snr_lin, cfg["processing"].get("snr_threshold_dB", 10.0))
+            prnu = float(np.mean(prnu_list)) if prnu_list else float("nan")
+            system_sens = float(np.mean(sens_list)) if sens_list else float("nan")
+            dn_at_10 = calculate_dn_at_snr(
+                signals, snr_lin, cfg["processing"].get("snr_threshold_dB", 10.0)
+            )
             snr_at_50 = calculate_snr_at_half(signals, snr_lin, dn_sat)
             dn_at_0 = calculate_dn_at_snr_one(signals, snr_lin)
 
@@ -203,10 +222,8 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             }
             save_summary_txt(per_gain, cfg, out_dir / "summary.txt")
 
-            mid_idx = (
-                cfg.get("reference", {}).get(
-                    "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
-                )
+            mid_idx = cfg.get("reference", {}).get(
+                "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
             )
             exp_data = collect_mid_roi_snr(roi_table, mid_idx)
 
@@ -236,7 +253,7 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, autoload: Path | None = None):
         super().__init__()
         self.setWindowTitle("Sensor Evaluation GUI")
         self.project_dir: Path | None = None
@@ -245,6 +262,8 @@ class MainWindow(QMainWindow):
         self.canvases: list[FigureCanvas] = []
         self._setup_ui()
         self.resize(640, 480)
+        if autoload is not None:
+            QTimer.singleShot(0, lambda: self.open_project(Path(autoload)))
 
     # ──────────────────────────────────────────── UI setup
     def _setup_ui(self):
@@ -287,10 +306,16 @@ class MainWindow(QMainWindow):
         dir_path = QFileDialog.getExistingDirectory(self, "Select Project Folder")
         if not dir_path:
             return
-        self.project_dir = Path(dir_path)
+        self.open_project(Path(dir_path))
+
+    def open_project(self, path: Path) -> None:
+        """Load project at path and start analysis."""
+        self.project_dir = path
         cfg_path = self.project_dir / "config.yaml"
         if not cfg_path.is_file():
-            QMessageBox.critical(self, "Error", "config.yaml not found in project folder")
+            QMessageBox.critical(
+                self, "Error", "config.yaml not found in project folder"
+            )
             return
         self.config = load_config(cfg_path)
         self.status.setText(f"Project loaded: {self.project_dir}")
@@ -327,7 +352,9 @@ class MainWindow(QMainWindow):
         if self.project_dir is None or self.config is None:
             return
 
-        out_dir = self.project_dir / self.config.get("output", {}).get("output_dir", "output")
+        out_dir = self.project_dir / self.config.get("output", {}).get(
+            "output_dir", "output"
+        )
 
         summary_path = out_dir / "summary.txt"
         if summary_path.is_file():
@@ -423,4 +450,6 @@ class MainWindow(QMainWindow):
 # ──────────────────────────────────────────── Entrypoint
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    win = MainWindow(); win.show(); sys.exit(app.exec())
+    win = MainWindow()
+    win.show()
+    sys.exit(app.exec())
