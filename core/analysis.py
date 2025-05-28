@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Tuple, Any, List
 import os
+
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import numpy as np
@@ -34,15 +35,22 @@ __all__ = [
 
 # ───────────────────────────── internal helpers
 
-def _mask_from_rects(shape: Tuple[int, int], rects: List[Tuple[int, int, int, int]]) -> np.ndarray:
+
+def _mask_from_rects(
+    shape: Tuple[int, int], rects: List[Tuple[int, int, int, int]]
+) -> np.ndarray:
     mask = np.zeros(shape, bool)
     for l, t, w, h in rects:
-        mask[t:t + h, l:l + w] = True
+        mask[t : t + h, l : l + w] = True
     return mask
+
 
 # ───────────────────────────── public api
 
-def extract_roi_stats(project_dir: Path | str, cfg: Dict[str, Any]) -> Dict[Tuple[float, float], Dict[str, float]]:
+
+def extract_roi_stats(
+    project_dir: Path | str, cfg: Dict[str, Any]
+) -> Dict[Tuple[float, float], Dict[str, float]]:
     """Compute mean, standard deviation and SNR for each ROI.
 
     Parameters
@@ -61,9 +69,9 @@ def extract_roi_stats(project_dir: Path | str, cfg: Dict[str, Any]) -> Dict[Tupl
     res: Dict[Tuple[float, float], Dict[str, float]] = {}
 
     chart_roi_file = project_dir / cfg["measurement"]["chart_roi_file"]
-    flat_roi_file  = project_dir / cfg["measurement"]["flat_roi_file"]
+    flat_roi_file = project_dir / cfg["measurement"]["flat_roi_file"]
     chart_rects = load_rois(chart_roi_file)
-    flat_rects  = load_rois(flat_roi_file)
+    flat_rects = load_rois(flat_roi_file)
 
     snr_thresh = cfg["processing"].get("snr_threshold_dB", 10.0)
     min_sig_factor = cfg["processing"].get("min_sig_factor", 3.0)
@@ -83,7 +91,7 @@ def extract_roi_stats(project_dir: Path | str, cfg: Dict[str, Any]) -> Dict[Tupl
             mask = _mask_from_rects(stack.shape[1:], rects)
             pix = stack[:, mask]
             mean = float(np.mean(pix))
-            std  = float(np.std(pix))
+            std = float(np.std(pix))
             if std == 0:
                 continue
             if mean < min_sig_factor * std:
@@ -95,7 +103,9 @@ def extract_roi_stats(project_dir: Path | str, cfg: Dict[str, Any]) -> Dict[Tupl
     return res
 
 
-def extract_roi_table(project_dir: Path | str, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+def extract_roi_table(
+    project_dir: Path | str, cfg: Dict[str, Any]
+) -> List[Dict[str, Any]]:
     """Return ROI statistics formatted for CSV output.
 
     Parameters
@@ -140,19 +150,23 @@ def extract_roi_table(project_dir: Path | str, cfg: Dict[str, Any]) -> List[Dict
                 mean = float(np.mean(pix))
                 std = float(np.std(pix))
                 snr_db = float("nan") if std == 0 else float(20 * np.log10(mean / std))
-                rows.append({
-                    "ROI Type": roi_type,
-                    "ROI No": i if roi_type == "grayscale" else "-",
-                    "Gain (dB)": gain_db,
-                    "Exposure": ratio,
-                    "Mean": mean,
-                    "Std": std,
-                    "SNR (dB)": snr_db,
-                })
+                rows.append(
+                    {
+                        "ROI Type": roi_type,
+                        "ROI No": i if roi_type == "grayscale" else "-",
+                        "Gain (dB)": gain_db,
+                        "Exposure": ratio,
+                        "Mean": mean,
+                        "Std": std,
+                        "SNR (dB)": snr_db,
+                    }
+                )
     return rows
 
 
-def collect_mid_roi_snr(rows: List[Dict[str, Any]], mid_index: int) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
+def collect_mid_roi_snr(
+    rows: List[Dict[str, Any]], mid_index: int
+) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
     """Return SNR curves for the grayscale ROI at ``mid_index``.
 
     Parameters
@@ -187,7 +201,9 @@ def collect_mid_roi_snr(rows: List[Dict[str, Any]], mid_index: int) -> Dict[floa
     return res
 
 
-def calculate_snr_curve(signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
+def calculate_snr_curve(
+    signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]
+) -> np.ndarray:
     """Compute the signal-to-noise ratio for each pixel.
 
     Parameters
@@ -207,7 +223,9 @@ def calculate_snr_curve(signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, An
     return snr
 
 
-def calculate_dynamic_range(snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, Any]) -> float:
+def calculate_dynamic_range(
+    snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, Any]
+) -> float:
     """Estimate dynamic range from the SNR curve.
 
     Parameters
@@ -237,7 +255,7 @@ def calculate_dynamic_range(snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, 
 
 def _reduce(values: np.ndarray, mode: str) -> float:
     if mode == "rms":
-        return float(np.sqrt(np.mean(values ** 2)))
+        return float(np.sqrt(np.mean(values**2)))
     if mode == "mean":
         return float(np.mean(values))
     if mode == "median":
@@ -248,7 +266,9 @@ def _reduce(values: np.ndarray, mode: str) -> float:
     raise ValueError(mode)
 
 
-def calculate_dark_noise(project_dir: Path | str, cfg: Dict[str, Any]) -> Tuple[float, float]:
+def calculate_dark_noise(
+    project_dir: Path | str, cfg: Dict[str, Any]
+) -> Tuple[float, float]:
     """Calculate DSNU and read noise from a dark frame stack.
 
     Parameters
@@ -290,7 +310,9 @@ def calculate_dark_noise(project_dir: Path | str, cfg: Dict[str, Any]) -> Tuple[
     return dsnu, read_noise
 
 
-def calculate_dark_noise_gain(project_dir: Path | str, gain_db: float, cfg: Dict[str, Any]) -> Tuple[float, float, np.ndarray, np.ndarray]:
+def calculate_dark_noise_gain(
+    project_dir: Path | str, gain_db: float, cfg: Dict[str, Any]
+) -> Tuple[float, float, np.ndarray, np.ndarray]:
     """Calculate dark noise metrics for a specific gain setting.
 
     Parameters
@@ -423,13 +445,13 @@ def calculate_pseudo_prnu(
         cols = []
         for i in range(order + 1):
             for j in range(order + 1 - i):
-                cols.append((xm ** i) * (ym ** j))
+                cols.append((xm**i) * (ym**j))
         A = np.vstack(cols).T
         coef, *_ = np.linalg.lstsq(A, z, rcond=None)
         cols_full = []
         for i in range(order + 1):
             for j in range(order + 1 - i):
-                cols_full.append((x ** i) * (y ** j))
+                cols_full.append((x**i) * (y**j))
         A_full = np.stack(cols_full, axis=0)
         fitted = np.tensordot(coef, A_full, axes=(0, 0))
         return fitted
@@ -444,7 +466,9 @@ def calculate_pseudo_prnu(
         std_frame = np.std(flat_stack, axis=0)
 
     stat_mode = cfg.get("processing", {}).get("stat_mode", "rms")
-    value = _reduce(std_frame[mask], stat_mode) / max(mean_frame[mask].mean(), 1e-6) * 100.0
+    value = (
+        _reduce(std_frame[mask], stat_mode) / max(mean_frame[mask].mean(), 1e-6) * 100.0
+    )
     return value, std_frame
 
 
@@ -452,6 +476,7 @@ def calculate_system_sensitivity(
     flat_stack: np.ndarray,
     cfg: Dict[str, Any],
     rects: list[tuple[int, int, int, int]] | None = None,
+    ratio: float = 1.0,
 ) -> float:
     """Compute system sensitivity in DN per irradiance and exposure time.
 
@@ -463,6 +488,9 @@ def calculate_system_sensitivity(
         Parsed configuration dictionary containing illumination info.
     rects:
         Optional ROI rectangles over which to compute the mean.
+
+    ratio:
+        Exposure multiplier relative to ``exposure_ms``.
 
     Returns
     -------
@@ -479,7 +507,7 @@ def calculate_system_sensitivity(
     illum = cfg.get("illumination", {})
     power = float(illum.get("power_uW_cm2", 1.0))
     exposure_ms = float(illum.get("exposure_ms", 1.0))
-    denom = power * exposure_ms / 1000.0
+    denom = power * exposure_ms * float(ratio) / 1000.0
     if denom == 0:
         return 0.0
 
@@ -487,7 +515,9 @@ def calculate_system_sensitivity(
     return mean_dn / denom
 
 
-def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: float) -> float:
+def calculate_dn_at_snr(
+    signal: np.ndarray, snr_lin: np.ndarray, threshold_db: float
+) -> float:
     """Interpolate the DN value where the SNR reaches ``threshold_db``.
 
     Parameters
@@ -510,15 +540,17 @@ def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: f
         return float("nan")
     if idx[0] == 0:
         return float(signal[0])
-    x0, x1 = signal[idx[0]-1], signal[idx[0]]
-    y0, y1 = snr_lin[idx[0]-1], snr_lin[idx[0]]
+    x0, x1 = signal[idx[0] - 1], signal[idx[0]]
+    y0, y1 = snr_lin[idx[0] - 1], snr_lin[idx[0]]
     if y1 == y0:
         return float(x1)
     r = (thr_lin - y0) / (y1 - y0)
     return float(x0 + r * (x1 - x0))
 
 
-def calculate_snr_at_half(signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float) -> float:
+def calculate_snr_at_half(
+    signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float
+) -> float:
     """Return the SNR in dB at half of ``dn_sat``.
 
     Parameters
