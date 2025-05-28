@@ -4,6 +4,8 @@ import sys
 import os
 import logging
 import faulthandler
+import argparse
+from pathlib import Path
 
 from gui.main_window import MainWindow
 from utils.logger import setup_logging
@@ -27,13 +29,16 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover - fail safe
             logging.debug("Failed to enable faulthandler: %s", exc)
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project", help="Project folder to load", type=str)
+    args, qt_args = parser.parse_known_args()
+
     logging.info("Application started")
-    app = QApplication(sys.argv)
-    win = MainWindow()
+    app = QApplication([sys.argv[0]] + qt_args)
+    win = MainWindow(Path(args.project) if args.project else None)
     win.show()
     sys.exit(app.exec())
 
 
 if __name__ == "__main__":
     main()
-
