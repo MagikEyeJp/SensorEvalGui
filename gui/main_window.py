@@ -55,6 +55,7 @@ from core.analysis import (
     calculate_system_sensitivity,
     collect_mid_roi_snr,
     collect_gain_snr_signal,
+    collect_prnu_points,
     calculate_dn_at_snr,
     calculate_snr_at_half,
     calculate_dn_at_snr_one,
@@ -120,9 +121,13 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 tuples_c = sorted(stats_corr.items(), key=lambda kv: kv[1]["mean"])
                 signals_corr = np.array([kv[1]["mean"] for kv in tuples_c])
                 noises_corr = np.array([kv[1]["std"] for kv in tuples_c])
+                prnu_stats = stats_corr
             else:
                 signals_corr = signals
                 noises_corr = noises
+                prnu_stats = stats
+
+            prnu_data = collect_prnu_points(prnu_stats)
 
             roi_table = extract_roi_table(project, cfg)
             flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
@@ -248,9 +253,7 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
 
             plot_snr_vs_signal_multi(sig_data, cfg, out_dir / "snr_signal.png")
             plot_snr_vs_exposure(exp_data, cfg, out_dir / "snr_exposure.png")
-            plot_prnu_regression(
-                signals_corr, noises_corr, cfg, out_dir / "prnu_fit.png"
-            )
+            plot_prnu_regression(prnu_data, cfg, out_dir / "prnu_fit.png")
             plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
             plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
             plot_heatmap(prnu_map, "PRNU residual", out_dir / "prnu_residual_map.png")

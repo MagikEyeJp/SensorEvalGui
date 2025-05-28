@@ -30,6 +30,7 @@ __all__ = [
     "calculate_system_sensitivity",
     "collect_mid_roi_snr",
     "collect_gain_snr_signal",
+    "collect_prnu_points",
     "calculate_dn_at_snr",
     "calculate_snr_at_half",
     "calculate_dn_at_snr_one",
@@ -369,6 +370,27 @@ def collect_gain_snr_signal(
         items.sort(key=lambda x: x[0])
         sig, s = zip(*items)
         res[gain] = (np.array(sig), np.array(s))
+    return res
+
+
+def collect_prnu_points(
+    stats: Dict[tuple[float, float], Dict[str, float]],
+) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
+    """Return mean/std arrays per gain for PRNU regression."""
+
+    data: Dict[float, list[tuple[float, float]]] = {}
+    for (gain, _), vals in stats.items():
+        std = float(vals.get("std", 0.0))
+        if std == 0:
+            continue
+        mean = float(vals.get("mean", 0.0))
+        data.setdefault(gain, []).append((mean, std))
+
+    res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
+    for gain, items in data.items():
+        items.sort(key=lambda x: x[0])
+        m, s = zip(*items)
+        res[gain] = (np.array(m), np.array(s))
     return res
 
 
