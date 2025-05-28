@@ -102,3 +102,57 @@ def test_collect_gain_snr_signal_rows():
     sig, snr = data[0.0]
     assert np.allclose(sig, [10.0, 20.0])
     assert np.allclose(snr, [10.0, 10.0])
+
+
+def test_extract_roi_stats_mid_index(tmp_path):
+    def _roiread_multi(path):
+        class _R:
+            def __init__(self, left: int):
+                self.left = left
+                self.top = 0
+                self.width = 1
+                self.height = 2
+
+        return [_R(0), _R(1), _R(2)]
+
+    sys.modules["roifile"] = types.SimpleNamespace(roiread=_roiread_multi)
+    importlib.reload(roi)
+    importlib.reload(analysis)
+
+    project = tmp_path
+    stack = np.stack(
+        [
+            [[10, 20, 30], [10, 20, 30]],
+            [[11, 21, 31], [11, 21, 31]],
+        ],
+        axis=0,
+    ).astype(np.uint16)
+    gain_dir = project / "gain_0dB" / "chart_1x"
+    gain_dir.mkdir(parents=True)
+    for i, frame in enumerate(stack):
+        tifffile.imwrite(gain_dir / f"frame{i}.tiff", frame)
+
+    roi_file = project / "roi.zip"
+    roi_file.write_text("dummy")
+
+    cfg_data = {
+        "measurement": {
+            "gains": {0: {"folder": "gain_0dB"}},
+            "exposures": {1.0: {"folder": "chart_1x"}},
+            "chart_roi_file": str(roi_file),
+            "flat_roi_file": str(roi_file),
+            "roi_mid_index": 1,
+        }
+    }
+    cfg_file = project / "config.yaml"
+    with cfg_file.open("w") as fh:
+        import yaml
+
+        yaml.safe_dump(cfg_data, fh)
+
+    cfg = load_config(cfg_file)
+    stats = analysis.extract_roi_stats(project, cfg)
+    assert (0.0, 1.0) in stats
+    res = stats[(0.0, 1.0)]
+    assert pytest.approx(res["mean"], abs=1e-6) == 20.5
+    assert pytest.approx(res["std"], abs=1e-6) == 0.5
