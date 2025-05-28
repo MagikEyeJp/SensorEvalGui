@@ -17,7 +17,7 @@ This project aims to:
 
 ## 🏗 Directory Structure
 
-	sensor_eval/
+	SensorEvalGui/
 	├── main.py                  # Entry point for GUI
 	├── gui/
 	│   └── main_window.py           # Main PySide6 GUI logic
@@ -48,7 +48,7 @@ Tested on:
 
 ## 🚀 How to Run
 
-python main.py
+Run the GUI using `python main.py`
 
 	1.	Select a folder containing a stack of 16-bit TIFF images
 	2.	The GUI will compute ROI stats, plot SNR graphs, and export results
