@@ -39,3 +39,12 @@ def test_plot_snr_vs_signal_multi_invalid(tmp_path):
     data = {0.0: (np.array([1.0]), np.array([-1.0]))}
     with pytest.raises(ValueError):
         plotting.plot_snr_vs_signal_multi(data, {}, tmp_path / "bad.png")
+
+
+def test_plot_roi_area(tmp_path):
+    img = np.zeros((4, 4))
+    rects = [[(0, 0, 2, 2)], [(1, 1, 2, 2)], []]
+    plotting.plot_roi_area(
+        [img, img, img], rects, ["a", "b", "c"], tmp_path / "roi.png"
+    )
+    assert (tmp_path / "roi.png").is_file()

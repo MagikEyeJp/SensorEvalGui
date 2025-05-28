@@ -11,11 +11,13 @@ import numpy as np
 __all__ = [
     "find_condition_folders",
     "load_image_stack",
+    "load_first_frame",
 ]
 
 # -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
+
 
 def _collect_frames(folder: Path) -> List[Path]:
     """Return sorted list of TIFF files (.tif/.tiff) in *folder*."""
@@ -27,14 +29,17 @@ def _collect_frames(folder: Path) -> List[Path]:
 # Public API
 # -----------------------------------------------------------------------------
 
-def find_condition_folders(project_dir: Path | str, cfg: Dict) -> List[Tuple[Path, float, float]]:
+
+def find_condition_folders(
+    project_dir: Path | str, cfg: Dict
+) -> List[Tuple[Path, float, float]]:
     """Discover leaf folders <gain>/<exposure> present on disk.
 
     Returns list[ (folder_path, gain_db, exposure_ratio) ].
     """
     project_dir = Path(project_dir)
 
-    gains_cfg = cfg["measurement"]["gains"]      # dict: db -> {folder: ..}
+    gains_cfg = cfg["measurement"]["gains"]  # dict: db -> {folder: ..}
     exposures_cfg = cfg["measurement"]["exposures"]  # dict: ratio -> {folder: ..}
 
     folders: List[Tuple[Path, float, float]] = []
@@ -59,3 +64,13 @@ def load_image_stack(folder: Path | str) -> np.ndarray:
         raise FileNotFoundError(f"No TIFF files in {folder}")
     stack = [tifffile.imread(str(f)) for f in files]
     return np.stack(stack, axis=0)
+
+
+def load_first_frame(folder: Path | str) -> np.ndarray:
+    """Load the first TIFF frame in *folder* as ``(H,W)`` array."""
+
+    folder = Path(folder)
+    files = _collect_frames(folder)
+    if not files:
+        raise FileNotFoundError(f"No TIFF files in {folder}")
+    return tifffile.imread(str(files[0]))

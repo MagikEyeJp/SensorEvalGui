@@ -147,6 +147,7 @@ def report_html(
         "dsnu_map",
         "readnoise_map",
         "prnu_residual_map",
+        "roi_area",
     ]:
         if key in graphs and graphs[key].exists():
             title = key.replace("_", " ").title()

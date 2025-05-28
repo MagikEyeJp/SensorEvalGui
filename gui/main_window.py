@@ -66,6 +66,7 @@ from core.plotting import (
     plot_snr_vs_exposure,
     plot_prnu_regression,
     plot_heatmap,
+    plot_roi_area,
 )
 from utils.roi import load_rois
 from core.report_gen import save_summary_txt, report_csv, report_html
@@ -257,6 +258,31 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
             plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
             plot_heatmap(prnu_map, "PRNU residual", out_dir / "prnu_residual_map.png")
+
+            try:
+                g0 = cfgutil.nearest_gain(cfg, 0.0)
+                r1 = cfgutil.nearest_exposure(cfg, 1.0)
+                chart_folder = cfgutil.find_exposure_folder(project, g0, r1, cfg)
+                chart_img = load_first_frame(chart_folder)
+                flat_folder = cfgutil.find_gain_folder(project, g0, cfg) / cfg[
+                    "measurement"
+                ].get("flat_lens_folder", "LensFlat")
+                flat_img = load_first_frame(flat_folder)
+                dark_folder = cfgutil.find_gain_folder(project, g0, cfg) / cfg[
+                    "measurement"
+                ].get("dark_folder", "dark")
+                dark_img = load_first_frame(dark_folder)
+                chart_rects = load_rois(project / cfg["measurement"]["chart_roi_file"])
+                flat_rects = load_rois(project / cfg["measurement"]["flat_roi_file"])
+                plot_roi_area(
+                    [chart_img, flat_img, dark_img],
+                    [chart_rects, flat_rects, flat_rects],
+                    ["Grayscale", "Flat", "Dark"],
+                    out_dir / "roi_area.png",
+                )
+            except Exception as exc:  # pragma: no cover - optional
+                logging.info("ROI area plot failed: %s", exc)
+
             log_memory_usage("after plots: ")
 
             graphs = {
@@ -266,6 +292,7 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 "dsnu_map": out_dir / "dsnu_map.png",
                 "readnoise_map": out_dir / "readnoise_map.png",
                 "prnu_residual_map": out_dir / "prnu_residual_map.png",
+                "roi_area": out_dir / "roi_area.png",
             }
             report_html(summary_avg, graphs, cfg, out_dir / "report.html")
             logging.info("Pipeline completed")
@@ -396,6 +423,7 @@ class MainWindow(QMainWindow):
             "DSNU Map": "dsnu_map.png",
             "Readnoise Map": "readnoise_map.png",
             "PRNU Residual": "prnu_residual_map.png",
+            "ROI Area": "roi_area.png",
         }
 
         for title, fname in graph_files.items():

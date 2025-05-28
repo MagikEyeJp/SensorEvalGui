@@ -19,6 +19,7 @@ __all__ = [
     "plot_snr_vs_exposure",
     "plot_prnu_regression",
     "plot_heatmap",
+    "plot_roi_area",
 ]
 
 
@@ -185,6 +186,34 @@ def plot_heatmap(data: np.ndarray, title: str, output_path: Path):
     plt.imshow(data, cmap="viridis")
     plt.title(title)
     plt.colorbar(label="DN")
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+
+
+def plot_roi_area(
+    images: Sequence[np.ndarray],
+    rects: Sequence[Sequence[tuple[int, int, int, int]]],
+    titles: Sequence[str],
+    output_path: Path,
+):
+    """Visualize ROI rectangles on given images."""
+
+    if len(images) != len(rects) or len(images) != len(titles):
+        raise ValueError("images, rects and titles must have the same length")
+
+    n = len(images)
+    plt.figure(figsize=(4 * n, 4))
+    for i, (img, rs, title) in enumerate(zip(images, rects, titles), start=1):
+        ax = plt.subplot(1, n, i)
+        ax.imshow(img, cmap="gray")
+        for l, t, w, h in rs:
+            rect = plt.Rectangle(
+                (l, t), w, h, edgecolor="r", facecolor="none", linewidth=1
+            )
+            ax.add_patch(rect)
+        ax.set_title(title)
+        ax.set_axis_off()
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()
