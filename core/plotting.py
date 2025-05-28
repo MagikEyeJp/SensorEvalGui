@@ -139,26 +139,42 @@ def plot_snr_vs_exposure(
 
 
 def plot_prnu_regression(
-    means: np.ndarray, stds: np.ndarray, cfg: Dict[str, Any], output_path: Path
+    data: Dict[float, tuple[np.ndarray, np.ndarray]],
+    cfg: Dict[str, Any],
+    output_path: Path,
 ):
-    """Plot PRNU regression (std vs mean) with LS or WLS fit."""
+    """Plot PRNU regression per gain with LS or WLS fit."""
+
     plt.figure()
-    plt.scatter(means, stds, s=8, alpha=0.6)
-    if means.size > 1:
-        fit_mode = cfg.get("processing", {}).get("prnu_fit", "LS").upper()
-        if fit_mode == "WLS":
-            w = 1.0 / np.maximum(stds, 1e-6)
-            p = np.polyfit(means, stds, 1, w=w)
-        else:
-            p = np.polyfit(means, stds, 1)
-        x = np.linspace(means.min(), means.max(), 100)
-        y = np.polyval(p, x)
-        plt.plot(x, y, "r--", label=f"y={p[0]:.3f}x+{p[1]:.3f}")
-        plt.legend(fontsize=8)
+    fit_mode = cfg.get("processing", {}).get("prnu_fit", "LS").upper()
+    cmap = plt.cm.get_cmap("tab10")
+
+    for idx, (gain, (means, stds)) in enumerate(sorted(data.items())):
+        means = _validate_positive_finite(means, "mean")
+        stds = _validate_positive_finite(stds, "std")
+        color = cmap(idx % 10)
+        plt.scatter(means, stds, s=8, alpha=0.6, color=color, label=f"{gain:g}dB")
+        if means.size > 1:
+            if fit_mode == "WLS":
+                w = 1.0 / np.maximum(stds, 1e-6)
+                p = np.polyfit(means, stds, 1, w=w)
+            else:
+                p = np.polyfit(means, stds, 1)
+            x = np.linspace(means.min(), means.max(), 100)
+            y = np.polyval(p, x)
+            plt.plot(
+                x,
+                y,
+                linestyle="--",
+                color=color,
+                label=f"{gain:g}dB fit: y={p[0]:.3f}x+{p[1]:.3f}",
+            )
+
     plt.xlabel("Mean (DN)")
     plt.ylabel("Std (DN)")
     plt.title("PRNU Regression")
     plt.grid(True)
+    plt.legend(fontsize=8)
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()
