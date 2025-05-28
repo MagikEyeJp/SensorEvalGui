@@ -71,12 +71,14 @@ from core.plotting import (
 from utils.roi import load_rois
 from core.report_gen import save_summary_txt, report_csv, report_html
 from core.loader import load_image_stack
+from typing import Callable, Optional
 
 
 class EvalWorker(QThread):
     finished = Signal(dict)
     error = Signal(str)
     progress = Signal(int)
+    status = Signal(str)
 
     def __init__(self, project: Path, cfg: Dict[str, Any]):
         super().__init__()
@@ -87,7 +89,12 @@ class EvalWorker(QThread):
         try:
             logging.info("Evaluation worker started")
             log_memory_usage("before pipeline: ")
-            summary = run_pipeline(self.project, self.cfg)
+            summary = run_pipeline(
+                self.project,
+                self.cfg,
+                progress=self.progress.emit,
+                status=self.status.emit,
+            )
             self.progress.emit(100)
             logging.info("Evaluation worker finished")
             log_memory_usage("after pipeline: ")
@@ -97,12 +104,22 @@ class EvalWorker(QThread):
             self.error.emit(str(e))
 
 
-def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
+def run_pipeline(
+    project: Path,
+    cfg: Dict[str, Any],
+    *,
+    progress: Optional[Callable[[int], None]] = None,
+    status: Optional[Callable[[str], None]] = None,
+) -> Dict[str, float]:
     """Run full analysis pipeline with logging and memory checks."""
     logging.info("Pipeline start: %s", project)
     with pipeline_lock:
         try:
             log_memory_usage("start: ")
+            if status:
+                status("Loading images...")
+            if progress:
+                progress(0)
 
             # 1. ROI-based statistics
             stats = extract_roi_stats(project, cfg)
@@ -110,6 +127,8 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 raise RuntimeError("No valid stacks found for analysis")
 
             log_memory_usage("after roi stats: ")
+            if progress:
+                progress(10)
             tuples = sorted(stats.items(), key=lambda kv: kv[1]["mean"])
             signals = np.array([kv[1]["mean"] for kv in tuples])
             noises = np.array([kv[1]["std"] for kv in tuples])
@@ -144,8 +163,12 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             prnu_list = []
             sens_list = []
             per_gain: Dict[float, Dict[str, float]] = {}
+            gains_list = [g for g, _ in cfgutil.gain_entries(cfg)]
+            step = 60 / len(gains_list) if gains_list else 60
             first = True
-            for gain_db, _ in cfgutil.gain_entries(cfg):
+            for idx, (gain_db, _) in enumerate(cfgutil.gain_entries(cfg)):
+                if status:
+                    status(f"Processing gain {gain_db:.1f} dB")
                 logging.info("Processing gain %.1f dB", gain_db)
                 dsnu, rn, dsnu_map_tmp, rn_map_tmp = calculate_dark_noise_gain(
                     project, gain_db, cfg
@@ -217,6 +240,8 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 prnu_list.append(prnu)
                 sens_list.append(sens)
                 log_memory_usage(f"after gain {gain_db}: ")
+                if progress:
+                    progress(int(10 + step * (idx + 1)))
 
             dsnu = float(np.mean(dsnu_list)) if dsnu_list else 0.0
             read_noise = float(np.mean(rn_list)) if rn_list else 0.0
@@ -230,6 +255,10 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             dn_at_0 = calculate_dn_at_snr_one(signals, snr_lin)
 
             log_memory_usage("after metrics: ")
+            if progress:
+                progress(80)
+            if status:
+                status("Plotting graphs...")
 
             stats_rows = roi_table
             report_csv(stats_rows, cfg, out_dir / "roi_stats.csv")
@@ -284,6 +313,8 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 logging.info("ROI area plot failed: %s", exc)
 
             log_memory_usage("after plots: ")
+            if progress:
+                progress(90)
 
             graphs = {
                 "snr_signal": out_dir / "snr_signal.png",
@@ -295,6 +326,8 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 "roi_area": out_dir / "roi_area.png",
             }
             report_html(summary_avg, graphs, cfg, out_dir / "report.html")
+            if progress:
+                progress(100)
             logging.info("Pipeline completed")
             log_memory_usage("pipeline end: ")
             return summary_avg
@@ -389,6 +422,7 @@ class MainWindow(QMainWindow):
         self.worker.finished.connect(self._analysis_done)
         self.worker.error.connect(self._analysis_error)
         self.worker.progress.connect(self.progress.setValue)
+        self.worker.status.connect(self.status.setText)
         self.worker.finished.connect(self._worker_finished)
         self.progress.setValue(0)
         self.worker.start()
