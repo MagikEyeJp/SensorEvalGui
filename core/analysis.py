@@ -43,7 +43,20 @@ def _mask_from_rects(shape: Tuple[int, int], rects: List[Tuple[int, int, int, in
 # ───────────────────────────── public api
 
 def extract_roi_stats(project_dir: Path | str, cfg: Dict[str, Any]) -> Dict[Tuple[float, float], Dict[str, float]]:
-    """Return dict keyed by (gain_db, exposure_ratio) with mean/std/snr."""
+    """Compute mean, standard deviation and SNR for each ROI.
+
+    Parameters
+    ----------
+    project_dir:
+        Root directory containing measurement folders.
+    cfg:
+        Parsed configuration dictionary.
+
+    Returns
+    -------
+    Dict[Tuple[float, float], Dict[str, float]]
+        Mapping ``(gain_db, exposure_ratio)`` to ``{"mean", "std", "snr"}`` values.
+    """
     project_dir = Path(project_dir)
     res: Dict[Tuple[float, float], Dict[str, float]] = {}
 
@@ -83,7 +96,20 @@ def extract_roi_stats(project_dir: Path | str, cfg: Dict[str, Any]) -> Dict[Tupl
 
 
 def extract_roi_table(project_dir: Path | str, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Return list of ROI stats rows for csv output."""
+    """Return ROI statistics formatted for CSV output.
+
+    Parameters
+    ----------
+    project_dir:
+        Root directory containing measurement folders.
+    cfg:
+        Parsed configuration dictionary.
+
+    Returns
+    -------
+    List[Dict[str, Any]]
+        Rows describing the ROI type, index, gain, exposure and statistics.
+    """
     project_dir = Path(project_dir)
     chart_roi_file = project_dir / cfg["measurement"]["chart_roi_file"]
     flat_roi_file = project_dir / cfg["measurement"]["flat_roi_file"]
@@ -127,7 +153,20 @@ def extract_roi_table(project_dir: Path | str, cfg: Dict[str, Any]) -> List[Dict
 
 
 def collect_mid_roi_snr(rows: List[Dict[str, Any]], mid_index: int) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
-    """Return {gain: (ratios, snr_lin)} for the specified grayscale ROI index."""
+    """Return SNR curves for the grayscale ROI at ``mid_index``.
+
+    Parameters
+    ----------
+    rows:
+        Rows from :func:`extract_roi_table`.
+    mid_index:
+        Index of the ROI to analyse.
+
+    Returns
+    -------
+    Dict[float, tuple[np.ndarray, np.ndarray]]
+        Mapping of gain to arrays of exposure ratios and linear SNR values.
+    """
     data: Dict[float, List[tuple[float, float]]] = {}
     for row in rows:
         if row.get("ROI Type") != "grayscale" or row.get("ROI No") != mid_index:
@@ -149,12 +188,42 @@ def collect_mid_roi_snr(rows: List[Dict[str, Any]], mid_index: int) -> Dict[floa
 
 
 def calculate_snr_curve(signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
+    """Compute the signal-to-noise ratio for each pixel.
+
+    Parameters
+    ----------
+    signal, noise:
+        Arrays of signal and noise values with matching shape.
+    cfg:
+        Configuration dictionary (unused).
+
+    Returns
+    -------
+    np.ndarray
+        Linear SNR calculated as ``signal / noise`` with ``NaN`` where noise is zero.
+    """
     with np.errstate(divide="ignore", invalid="ignore"):
         snr = np.where(noise == 0, np.nan, signal / noise)
     return snr
 
 
 def calculate_dynamic_range(snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, Any]) -> float:
+    """Estimate dynamic range from the SNR curve.
+
+    Parameters
+    ----------
+    snr:
+        Linear SNR values.
+    signal:
+        Corresponding DN levels.
+    cfg:
+        Configuration dictionary providing ``snr_threshold_dB``.
+
+    Returns
+    -------
+    float
+        Dynamic range in decibels based on the threshold crossing.
+    """
     thresh = cfg["processing"].get("snr_threshold_dB", 20.0)
     idx = np.where(snr >= thresh)[0]
     if idx.size == 0:
@@ -180,7 +249,20 @@ def _reduce(values: np.ndarray, mode: str) -> float:
 
 
 def calculate_dark_noise(project_dir: Path | str, cfg: Dict[str, Any]) -> Tuple[float, float]:
-    """Return (DSNU, read_noise) from dark stack."""
+    """Calculate DSNU and read noise from a dark frame stack.
+
+    Parameters
+    ----------
+    project_dir:
+        Root directory of the project containing the dark images.
+    cfg:
+        Parsed configuration dictionary.
+
+    Returns
+    -------
+    Tuple[float, float]
+        ``(dsnu, read_noise)`` in DN.
+    """
     project_dir = Path(project_dir)
     dark_folder = project_dir / cfg["measurement"].get("dark_folder", "dark")
     if not dark_folder.is_dir():
@@ -209,7 +291,22 @@ def calculate_dark_noise(project_dir: Path | str, cfg: Dict[str, Any]) -> Tuple[
 
 
 def calculate_dark_noise_gain(project_dir: Path | str, gain_db: float, cfg: Dict[str, Any]) -> Tuple[float, float, np.ndarray, np.ndarray]:
-    """Return (dsnu, read_noise, dsnu_map, read_noise_map) for given gain."""
+    """Calculate dark noise metrics for a specific gain setting.
+
+    Parameters
+    ----------
+    project_dir:
+        Root project directory.
+    gain_db:
+        Sensor gain in decibels to evaluate.
+    cfg:
+        Parsed configuration dictionary.
+
+    Returns
+    -------
+    Tuple[float, float, np.ndarray, np.ndarray]
+        ``(dsnu, read_noise, dsnu_map, read_noise_map)`` where maps match the image size.
+    """
     gain_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg)
     dark_folder = gain_folder / cfg["measurement"].get("dark_folder", "dark")
     stack = load_image_stack(dark_folder)
@@ -233,7 +330,20 @@ def calculate_dark_noise_gain(project_dir: Path | str, gain_db: float, cfg: Dict
 
 
 def calculate_dn_sat(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
-    """Detect DN_sat using multiple heuristics."""
+    """Estimate the sensor saturation level in DN.
+
+    Parameters
+    ----------
+    flat_stack:
+        Stack of illuminated flat-field frames.
+    cfg:
+        Parsed configuration dictionary.
+
+    Returns
+    -------
+    float
+        Detected saturation DN value.
+    """
     p999 = float(np.percentile(flat_stack, 99.9))
     sat_factor = cfg.get("illumination", {}).get(
         "sat_factor",
@@ -247,6 +357,20 @@ def calculate_dn_sat(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
 
 
 def calculate_dynamic_range_dn(dn_sat: float, read_noise: float) -> float:
+    """Compute dynamic range using DN values.
+
+    Parameters
+    ----------
+    dn_sat:
+        Saturation level in DN.
+    read_noise:
+        Measured read noise in DN.
+
+    Returns
+    -------
+    float
+        Dynamic range in decibels. Returns ``0.0`` if ``read_noise`` is zero.
+    """
     if read_noise == 0:
         return 0.0
     return 20.0 * np.log10(dn_sat / read_noise)
@@ -257,7 +381,22 @@ def calculate_pseudo_prnu(
     cfg: Dict[str, Any],
     rects: list[tuple[int, int, int, int]] | None = None,
 ) -> Tuple[float, np.ndarray]:
-    """Return (pseudo_prnu_percent, residual_map) within ROI."""
+    """Estimate pseudo-PRNU within the specified ROI.
+
+    Parameters
+    ----------
+    flat_stack:
+        Stack of flat-field frames.
+    cfg:
+        Parsed configuration dictionary.
+    rects:
+        Optional list of ROI rectangles ``(left, top, width, height)``.
+
+    Returns
+    -------
+    Tuple[float, np.ndarray]
+        ``(pseudo_prnu_percent, residual_map)`` where the residual map matches the image shape.
+    """
 
     mask = (
         _mask_from_rects(flat_stack.shape[1:], rects)
@@ -314,7 +453,22 @@ def calculate_system_sensitivity(
     cfg: Dict[str, Any],
     rects: list[tuple[int, int, int, int]] | None = None,
 ) -> float:
-    """Return System Sensitivity (DN/µW·cm⁻²·s) within ROI if provided."""
+    """Compute system sensitivity in DN per irradiance and exposure time.
+
+    Parameters
+    ----------
+    flat_stack:
+        Stack of flat-field frames.
+    cfg:
+        Parsed configuration dictionary containing illumination info.
+    rects:
+        Optional ROI rectangles over which to compute the mean.
+
+    Returns
+    -------
+    float
+        Sensitivity in DN / (µW·cm⁻²·s). Returns ``0.0`` if the denominator is zero.
+    """
 
     mask = (
         _mask_from_rects(flat_stack.shape[1:], rects)
@@ -334,7 +488,22 @@ def calculate_system_sensitivity(
 
 
 def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: float) -> float:
-    """Interpolate DN where SNR crosses threshold_dB."""
+    """Interpolate the DN value where the SNR reaches ``threshold_db``.
+
+    Parameters
+    ----------
+    signal:
+        Array of DN levels.
+    snr_lin:
+        Corresponding SNR values in linear scale.
+    threshold_db:
+        SNR threshold in decibels.
+
+    Returns
+    -------
+    float
+        Estimated DN at the given threshold or ``NaN`` if it is never reached.
+    """
     thr_lin = 10 ** (threshold_db / 20.0)
     idx = np.where(snr_lin >= thr_lin)[0]
     if idx.size == 0:
@@ -350,7 +519,22 @@ def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: f
 
 
 def calculate_snr_at_half(signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float) -> float:
-    """Return SNR (dB) at half of DN_sat using linear interpolation."""
+    """Return the SNR in dB at half of ``dn_sat``.
+
+    Parameters
+    ----------
+    signal:
+        DN levels sorted or unsorted.
+    snr_lin:
+        SNR values in linear scale.
+    dn_sat:
+        Saturation DN level.
+
+    Returns
+    -------
+    float
+        Interpolated SNR in decibels at ``dn_sat / 2`` or ``NaN`` if undefined.
+    """
     if signal.size == 0:
         return float("nan")
     order = np.argsort(signal)
@@ -364,5 +548,5 @@ def calculate_snr_at_half(signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float
 
 
 def calculate_dn_at_snr_one(signal: np.ndarray, snr_lin: np.ndarray) -> float:
-    """Convenience for DN where SNR=1 (0 dB)."""
+    """Shortcut for :func:`calculate_dn_at_snr` with a threshold of 0 dB."""
     return calculate_dn_at_snr(signal, snr_lin, 0.0)
