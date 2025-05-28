@@ -75,6 +75,10 @@ def extract_roi_stats(
     chart_rects = load_rois(chart_roi_file)
     flat_rects = load_rois(flat_roi_file)
 
+    mid_idx = cfg.get("reference", {}).get(
+        "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
+    )
+
     snr_thresh = cfg["processing"].get("snr_threshold_dB", 10.0)
     min_sig_factor = cfg["processing"].get("min_sig_factor", 3.0)
     excl_low_snr = cfg["processing"].get("exclude_abnormal_snr", True)
@@ -94,7 +98,10 @@ def extract_roi_stats(
                 tifffile.imwrite(folder / "stack_cache.tiff", stack)
 
             rects = chart_rects if "chart" in efold.lower() else flat_rects
-            mask = _mask_from_rects(stack.shape[1:], rects)
+            idx = mid_idx if "chart" in efold.lower() else 0
+            if idx >= len(rects):
+                idx = 0
+            mask = _mask_from_rects(stack.shape[1:], [rects[idx]])
             pix = stack[:, mask]
             mean = float(np.mean(pix))
             std = float(np.std(pix))
