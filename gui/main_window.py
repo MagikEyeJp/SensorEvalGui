@@ -35,6 +35,7 @@ from matplotlib.backends.backend_qtagg import (
     FigureCanvasQTAgg as FigureCanvas,
     NavigationToolbar2QT,
 )
+from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
 from utils.config import load_config
@@ -306,9 +307,8 @@ class MainWindow(QMainWindow):
         self.sel_btn.setEnabled(False)
         self.summary_view.clear()
         self.graph_tabs.clear()
-        self.canvases.clear()
+        self._clear_canvases()
         self.status.setText("Running...")
-        plt.switch_backend("Agg")
         self.worker = EvalWorker(self.project_dir, self.config)
         self.worker.finished.connect(self._analysis_done)
         self.worker.error.connect(self._analysis_error)
@@ -360,9 +360,8 @@ class MainWindow(QMainWindow):
 
     def _create_canvas(self, png_path: Path) -> QWidget:
         """Return QWidget with interactive matplotlib canvas for the PNG."""
-        plt.switch_backend("QtAgg")
         img = plt.imread(str(png_path))
-        fig = plt.figure(constrained_layout=True)
+        fig = Figure(constrained_layout=True)
         ax = fig.add_subplot(111)
         ax.imshow(img)
         ax.set_axis_off()
@@ -377,6 +376,17 @@ class MainWindow(QMainWindow):
         layout.addWidget(canvas)
         w.setLayout(layout)
         return w
+
+    def _clear_canvases(self) -> None:
+        """Close and delete existing matplotlib canvases."""
+        for canvas in self.canvases:
+            try:
+                plt.close(canvas.figure)
+            except Exception:
+                pass
+            canvas.setParent(None)
+            canvas.deleteLater()
+        self.canvases.clear()
 
     def _refresh_canvas_geometry(self) -> None:
         """Resize matplotlib figures to match their canvas widgets."""
