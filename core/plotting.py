@@ -20,12 +20,24 @@ __all__ = [
 ]
 
 
+def _validate_positive_finite(arr: np.ndarray, name: str) -> np.ndarray:
+    """Return *arr* if all values are finite and >0 else raise ValueError."""
+    arr = np.asarray(arr)
+    if not np.all(np.isfinite(arr)):
+        raise ValueError(f"{name} contains non-finite values")
+    if np.any(arr <= 0):
+        raise ValueError(f"{name} must be strictly positive")
+    return arr
+
+
 def _auto_labels(ratios: Sequence[float]) -> list[str]:
     return [f"{r:g}×" for r in ratios]
 
 
 def plot_snr_vs_signal(signal: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any], output_path: Path):
     """Plot SNR–Signal curve (log–log) with ideal line and threshold."""
+    signal = _validate_positive_finite(signal, "signal")
+    snr = _validate_positive_finite(snr, "snr")
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
     thr_lin = 10 ** (thresh / 20.0)
     plt.figure()
@@ -59,6 +71,8 @@ def plot_snr_vs_exposure(data: Dict[float, tuple[np.ndarray, np.ndarray]], cfg: 
 
     plt.figure()
     for gain, (ratios, snr) in sorted(data.items()):
+        ratios = _validate_positive_finite(ratios, "exposure ratios")
+        snr = _validate_positive_finite(snr, "snr")
         times = base_ms * ratios
         plt.semilogx(times, snr, marker="s", linestyle="-", label=f"{gain:g} dB")
     plt.axhline(thr_lin, color="r", linestyle="--", label=f"{thresh:g} dB")
