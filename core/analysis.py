@@ -103,8 +103,10 @@ def extract_roi_stats(
                 idx = 0
             mask = _mask_from_rects(stack.shape[1:], [rects[idx]])
             pix = stack[:, mask]
+            stat_mode = cfg["processing"].get("stat_mode", "rms")
             mean = float(np.mean(pix))
-            std = float(np.std(pix))
+            noise_pix = np.std(pix, axis=0)
+            std = float(_reduce(noise_pix, stat_mode))
             if std == 0:
                 logging.info("Skip due to zero std: %s", folder)
                 continue
@@ -170,11 +172,13 @@ def extract_roi_table(
             else:
                 roi_type = "flat"
                 rects = flat_rects
+            stat_mode = cfg["processing"].get("stat_mode", "rms")
             for i, r in enumerate(rects):
                 mask = _mask_from_rects(stack.shape[1:], [r])
                 pix = stack[:, mask]
                 mean = float(np.mean(pix))
-                std = float(np.std(pix))
+                noise_pix = np.std(pix, axis=0)
+                std = float(_reduce(noise_pix, stat_mode))
                 snr_db = float("nan") if std == 0 else float(20 * np.log10(mean / std))
                 rows.append(
                     {
