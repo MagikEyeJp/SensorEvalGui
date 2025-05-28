@@ -233,7 +233,7 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
             )
             exp_data = collect_mid_roi_snr(roi_table, mid_idx)
-            sig_data = collect_gain_snr_signal(stats)
+            sig_data = collect_gain_snr_signal(roi_table, cfg)
 
             plot_snr_vs_signal_multi(sig_data, cfg, out_dir / "snr_signal.png")
             plot_snr_vs_exposure(exp_data, cfg, out_dir / "snr_exposure.png")
