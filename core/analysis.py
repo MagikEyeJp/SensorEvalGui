@@ -272,7 +272,8 @@ def calculate_dynamic_range(
     float
         Dynamic range in decibels based on the threshold crossing.
     """
-    thresh = cfg["processing"].get("snr_threshold_dB", 20.0)
+    thresh_db = cfg["processing"].get("snr_threshold_dB", 20.0)
+    thresh = 10 ** (thresh_db / 20)
     idx = np.where(snr >= thresh)[0]
     if idx.size == 0:
         return 0.0
