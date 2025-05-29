@@ -204,9 +204,18 @@ def plot_prnu_regression(
     plt.close()
 
 
-def plot_heatmap(data: np.ndarray, title: str, output_path: Path):
+def plot_heatmap(
+    data: np.ndarray,
+    title: str,
+    output_path: Path,
+    *,
+    vmin: float | None = None,
+    vmax: float | None = None,
+) -> None:
+    """Draw heatmap with optional value scaling."""
+
     plt.figure()
-    plt.imshow(data, cmap="viridis")
+    plt.imshow(data, cmap="viridis", vmin=vmin, vmax=vmax)
     plt.title(title)
     plt.colorbar(label="DN")
     plt.tight_layout()
