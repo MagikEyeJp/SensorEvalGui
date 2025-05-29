@@ -10,6 +10,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # avoid GUI backend so plotting works inside threads
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import numpy as np
 
 from utils.logger import log_memory_usage
@@ -43,8 +44,13 @@ def _auto_labels(ratios: Sequence[float]) -> list[str]:
 
 
 def plot_snr_vs_signal(
-    signal: np.ndarray, snr: np.ndarray, cfg: Dict[str, Any], output_path: Path
-):
+    signal: np.ndarray,
+    snr: np.ndarray,
+    cfg: Dict[str, Any],
+    output_path: Path,
+    *,
+    return_fig: bool = False,
+) -> Figure | None:
     """Plot SNR–Signal curve (log–log) with ideal line and threshold."""
     signal = _validate_positive_finite(signal, "signal")
     snr = _validate_positive_finite(snr, "snr")
@@ -54,7 +60,7 @@ def plot_snr_vs_signal(
         snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
     snr_db = 20 * np.log10(snr)
-    plt.figure()
+    fig = plt.figure()
     plt.loglog(signal, snr_db, marker="o", linestyle="-", label="Measured")
     plt.loglog(signal, 20 * np.log10(np.sqrt(signal)), linestyle=":", label="Ideal √µ")
     plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
@@ -64,21 +70,26 @@ def plot_snr_vs_signal(
     plt.grid(True, which="both")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(output_path)
-    plt.close()
+    fig.savefig(output_path)
+    if return_fig:
+        return fig
+    plt.close(fig)
+    return None
 
 
 def plot_snr_vs_signal_multi(
     data: Dict[float, tuple[np.ndarray, np.ndarray]],
     cfg: Dict[str, Any],
     output_path: Path,
-):
+    *,
+    return_fig: bool = False,
+) -> Figure | None:
     """Plot SNR–Signal curves for multiple gains."""
     logging.info("plot_snr_vs_signal_multi: output=%s", output_path)
     log_memory_usage("plot start: ")
 
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
-    plt.figure()
+    fig = plt.figure()
 
     all_signals = []
     for gain, (sig, snr) in sorted(data.items()):
@@ -111,16 +122,22 @@ def plot_snr_vs_signal_multi(
     plt.grid(True, which="both")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(output_path)
-    plt.close()
+    fig.savefig(output_path)
+    if return_fig:
+        log_memory_usage("plot end: ")
+        return fig
+    plt.close(fig)
     log_memory_usage("plot end: ")
+    return None
 
 
 def plot_snr_vs_exposure(
     data: Dict[float, tuple[np.ndarray, np.ndarray]],
     cfg: Dict[str, Any],
     output_path: Path,
-):
+    *,
+    return_fig: bool = False,
+) -> Figure | None:
     """Plot SNR–Exposure curves per gain."""
 
     plot_cfg = cfg.get("plot", {})
@@ -136,7 +153,7 @@ def plot_snr_vs_exposure(
 
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
 
-    plt.figure()
+    fig = plt.figure()
     for gain, (ratios, snr) in sorted(data.items()):
         ratios = _validate_positive_finite(ratios, "exposure ratios")
         snr = _validate_positive_finite(snr, "snr")
@@ -158,18 +175,23 @@ def plot_snr_vs_exposure(
     plt.grid(True, which="both")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(output_path)
-    plt.close()
+    fig.savefig(output_path)
+    if return_fig:
+        return fig
+    plt.close(fig)
+    return None
 
 
 def plot_prnu_regression(
     data: Dict[float, tuple[np.ndarray, np.ndarray]],
     cfg: Dict[str, Any],
     output_path: Path,
-):
+    *,
+    return_fig: bool = False,
+) -> Figure | None:
     """Plot PRNU regression per gain with LS or WLS fit."""
 
-    plt.figure()
+    fig = plt.figure()
     fit_mode = cfg.get("processing", {}).get("prnu_fit", "LS").upper()
     cmap = plt.cm.get_cmap("tab10")
 
@@ -200,8 +222,11 @@ def plot_prnu_regression(
     plt.grid(True)
     plt.legend(fontsize=8)
     plt.tight_layout()
-    plt.savefig(output_path)
-    plt.close()
+    fig.savefig(output_path)
+    if return_fig:
+        return fig
+    plt.close(fig)
+    return None
 
 
 def plot_heatmap(
@@ -211,16 +236,20 @@ def plot_heatmap(
     *,
     vmin: float | None = None,
     vmax: float | None = None,
-) -> None:
+    return_fig: bool = False,
+) -> Figure | None:
     """Draw heatmap with optional value scaling."""
 
-    plt.figure()
+    fig = plt.figure()
     plt.imshow(data, cmap="viridis", vmin=vmin, vmax=vmax)
     plt.title(title)
     plt.colorbar(label="DN")
     plt.tight_layout()
-    plt.savefig(output_path)
-    plt.close()
+    fig.savefig(output_path)
+    if return_fig:
+        return fig
+    plt.close(fig)
+    return None
 
 
 def plot_roi_area(
@@ -228,14 +257,16 @@ def plot_roi_area(
     rects: Sequence[Sequence[tuple[int, int, int, int]]],
     titles: Sequence[str],
     output_path: Path,
-):
+    *,
+    return_fig: bool = False,
+) -> Figure | None:
     """Visualize ROI rectangles on given images."""
 
     if len(images) != len(rects) or len(images) != len(titles):
         raise ValueError("images, rects and titles must have the same length")
 
     n = len(images)
-    plt.figure(figsize=(4 * n, 4))
+    fig = plt.figure(figsize=(4 * n, 4))
     for i, (img, rs, title) in enumerate(zip(images, rects, titles), start=1):
         ax = plt.subplot(1, n, i)
         ax.imshow(img, cmap="gray")
@@ -247,5 +278,8 @@ def plot_roi_area(
         ax.set_title(title)
         ax.set_axis_off()
     plt.tight_layout()
-    plt.savefig(output_path)
-    plt.close()
+    fig.savefig(output_path)
+    if return_fig:
+        return fig
+    plt.close(fig)
+    return None
