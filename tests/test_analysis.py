@@ -317,3 +317,17 @@ def test_calculate_prnu_residual_simple():
     assert res.shape == (2, 2)
     assert np.allclose(res, expected)
     assert pytest.approx(val, abs=1e-6) == np.sqrt(np.mean(expected**2)) / 2.5 * 100.0
+
+
+def test_fit_gain_map_basic():
+    frame = np.array([[1, 2], [3, 4]], dtype=float)
+    mask = np.array([[True, False], [True, False]])
+    res = analysis.fit_gain_map(frame, mask, order=0)
+    assert np.allclose(res, 2.0)
+
+
+def test_fit_gain_map_order1_exact():
+    frame = np.array([[1, 2], [3, 4]], dtype=float)
+    mask = np.ones_like(frame, dtype=bool)
+    res = analysis.fit_gain_map(frame, mask, order=1)
+    assert np.allclose(res, frame)
