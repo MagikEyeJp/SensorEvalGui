@@ -304,7 +304,7 @@ def run_pipeline(
                 "DSNU map (scaled)",
                 out_dir / "dsnu_map_scaled.png",
                 vmin=0,
-                vmax=float(np.nanmax(dsnu_map)),
+                vmax=float(np.nanpercentile(dsnu_map, 99)),
             )
             log_memory_usage("after dsnu_map plot: ")
             plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
@@ -313,7 +313,7 @@ def run_pipeline(
                 "Read noise map (scaled)",
                 out_dir / "readnoise_map_scaled.png",
                 vmin=0,
-                vmax=float(np.nanmax(rn_map)),
+                vmax=float(np.nanpercentile(rn_map, 99)),
             )
             plot_heatmap(prnu_map, "PRNU residual", out_dir / "prnu_residual_map.png")
             plot_heatmap(
@@ -321,7 +321,7 @@ def run_pipeline(
                 "PRNU residual (scaled)",
                 out_dir / "prnu_residual_map_scaled.png",
                 vmin=0,
-                vmax=float(np.nanmax(prnu_map)),
+                vmax=float(np.nanpercentile(prnu_map, 99)),
             )
 
             try:
