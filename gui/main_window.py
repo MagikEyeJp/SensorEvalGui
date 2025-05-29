@@ -510,7 +510,7 @@ class MainWindow(QMainWindow):
         w_container.setLayout(layout)
 
         scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
+        scroll.setWidgetResizable(False)
         scroll.setWidget(w_container)
         return scroll
 
