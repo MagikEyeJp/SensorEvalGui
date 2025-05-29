@@ -281,10 +281,25 @@ def run_pipeline(
             exp_data = collect_mid_roi_snr(roi_table, mid_idx)
             sig_data = collect_gain_snr_signal(roi_table, cfg)
 
+            logging.info("Plotting SNR vs Signal (multi)")
+            log_memory_usage("before snr_signal plot: ")
             plot_snr_vs_signal_multi(sig_data, cfg, out_dir / "snr_signal.png")
+            log_memory_usage("after snr_signal plot: ")
+
+            logging.info("Plotting SNR vs Exposure")
+            log_memory_usage("before snr_exposure plot: ")
             plot_snr_vs_exposure(exp_data, cfg, out_dir / "snr_exposure.png")
+            log_memory_usage("after snr_exposure plot: ")
+
+            logging.info("Plotting PRNU regression")
+            log_memory_usage("before prnu_fit plot: ")
             plot_prnu_regression(prnu_data, cfg, out_dir / "prnu_fit.png")
+            log_memory_usage("after prnu_fit plot: ")
+
+            logging.info("Plotting noise maps")
+            log_memory_usage("before dsnu_map plot: ")
             plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
+            log_memory_usage("after dsnu_map plot: ")
             plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
             plot_heatmap(prnu_map, "PRNU residual", out_dir / "prnu_residual_map.png")
 
