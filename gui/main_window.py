@@ -299,9 +299,30 @@ def run_pipeline(
             logging.info("Plotting noise maps")
             log_memory_usage("before dsnu_map plot: ")
             plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
+            plot_heatmap(
+                dsnu_map,
+                "DSNU map (scaled)",
+                out_dir / "dsnu_map_scaled.png",
+                vmin=0,
+                vmax=float(np.nanmax(dsnu_map)),
+            )
             log_memory_usage("after dsnu_map plot: ")
             plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
+            plot_heatmap(
+                rn_map,
+                "Read noise map (scaled)",
+                out_dir / "readnoise_map_scaled.png",
+                vmin=0,
+                vmax=float(np.nanmax(rn_map)),
+            )
             plot_heatmap(prnu_map, "PRNU residual", out_dir / "prnu_residual_map.png")
+            plot_heatmap(
+                prnu_map,
+                "PRNU residual (scaled)",
+                out_dir / "prnu_residual_map_scaled.png",
+                vmin=0,
+                vmax=float(np.nanmax(prnu_map)),
+            )
 
             try:
                 g0 = cfgutil.nearest_gain(cfg, 0.0)
@@ -336,8 +357,11 @@ def run_pipeline(
                 "snr_exposure": out_dir / "snr_exposure.png",
                 "prnu_fit": out_dir / "prnu_fit.png",
                 "dsnu_map": out_dir / "dsnu_map.png",
+                "dsnu_map_scaled": out_dir / "dsnu_map_scaled.png",
                 "readnoise_map": out_dir / "readnoise_map.png",
+                "readnoise_map_scaled": out_dir / "readnoise_map_scaled.png",
                 "prnu_residual_map": out_dir / "prnu_residual_map.png",
+                "prnu_residual_map_scaled": out_dir / "prnu_residual_map_scaled.png",
                 "roi_area": out_dir / "roi_area.png",
             }
             report_html(summary_avg, graphs, cfg, out_dir / "report.html")
