@@ -79,13 +79,21 @@ def plot_snr_vs_signal_multi(
     for gain, (sig, snr) in sorted(data.items()):
         sig = _validate_positive_finite(sig, "signal")
         snr = _validate_positive_finite(snr, "snr")
+        if sig.size == 1 or snr.size == 1:
+            sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
+            snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
         all_signals.append(sig)
         snr_db = 20 * np.log10(snr)
         plt.loglog(sig, snr_db, marker="o", linestyle="-", label=f"{gain:g}dB")
 
     if all_signals:
         concat = np.concatenate(all_signals)
-        xs = np.linspace(concat.min(), concat.max(), 200)
+        x_min = float(concat.min())
+        x_max = float(concat.max())
+        if x_min == x_max:
+            xs = np.asarray([x_min * 0.9, x_max * 1.1])
+        else:
+            xs = np.linspace(x_min, x_max, 200)
         plt.loglog(xs, 20 * np.log10(np.sqrt(xs)), linestyle=":", label="Ideal √µ")
 
     plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
