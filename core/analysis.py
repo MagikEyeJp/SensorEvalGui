@@ -198,6 +198,33 @@ def extract_roi_stats_gainmap(
     debug_stacks = cfg["output"].get("debug_stacks", False)
     order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
 
+    def _fit_gain(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
+        if order <= 0:
+            c = float(np.mean(frame[mask]))
+            return np.full_like(frame, c)
+        y, x = np.indices(frame.shape)
+        xm, ym = x[mask].ravel(), y[mask].ravel()
+        z = frame[mask].ravel()
+        cols = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols.append((xm**i) * (ym**j))
+        A = np.vstack(cols).T
+        coef, *_ = np.linalg.lstsq(A, z, rcond=None)
+        cols_full = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols_full.append((x**i) * (y**j))
+        A_full = np.stack(cols_full, axis=0)
+        fitted = np.tensordot(coef, A_full, axes=(0, 0))
+        return fitted
+
+    mode = cfg.get("processing", {}).get("gain_map_mode", "none")
+    if mode == "none":
+        return extract_roi_stats(project_dir, cfg)
+
+    flat_cache: Dict[float, np.ndarray] = {}
+
     for gain_db, gfold in cfgutil.gain_entries(cfg):
         for ratio, efold in cfgutil.exposure_entries(cfg):
             folder = project_dir / gfold / efold
@@ -211,9 +238,23 @@ def extract_roi_stats_gainmap(
             if debug_stacks:
                 tifffile.imwrite(folder / "stack_cache.tiff", stack)
 
-            mean_frame = np.mean(stack, axis=0)
             mask_fit = _mask_from_rects(stack.shape[1:], flat_rects)
-            gain_map = fit_gain_map(mean_frame, mask_fit, order)
+            if mode == "self_fit":
+                mean_src = np.mean(stack, axis=0)
+                gain_map = _fit_gain(mean_src, mask_fit, order)
+            else:
+                flat_stack = flat_cache.get(gain_db)
+                if flat_stack is None:
+                    flat_folder = cfgutil.find_gain_folder(
+                        project_dir, gain_db, cfg
+                    ) / cfg["measurement"].get("flat_lens_folder", "LensFlat")
+                    flat_stack = load_image_stack(flat_folder)
+                    flat_cache[gain_db] = flat_stack
+                mean_src = np.mean(flat_stack, axis=0)
+                if mode == "flat_fit":
+                    gain_map = _fit_gain(mean_src, mask_fit, order)
+                else:  # flat_frame
+                    gain_map = mean_src
             gain_map = np.where(gain_map == 0, 1e-6, gain_map)
             corrected = stack / gain_map
 
@@ -618,6 +659,8 @@ def calculate_pseudo_prnu(
     flat_stack: np.ndarray,
     cfg: Dict[str, Any],
     rects: list[tuple[int, int, int, int]] | None = None,
+    project_dir: Path | str | None = None,
+    gain_db: float | None = None,
 ) -> Tuple[float, np.ndarray]:
     """Estimate pseudo-PRNU within the specified ROI.
 
@@ -648,11 +691,43 @@ def calculate_pseudo_prnu(
         dn_sat = calculate_dn_sat(flat_stack, cfg)
         mask &= mean_frame <= margin * dn_sat
 
-    apply_gain = cfg.get("processing", {}).get("apply_gain_map", False)
+    mode = cfg.get("processing", {}).get("gain_map_mode", "none")
     order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
 
-    if apply_gain:
-        gain_map = fit_gain_map(mean_frame, mask, order)
+    def _fit_gain(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
+        if order <= 0:
+            c = float(np.mean(frame[mask]))
+            return np.full_like(frame, c)
+        y, x = np.indices(frame.shape)
+        xm, ym = x[mask].ravel(), y[mask].ravel()
+        z = frame[mask].ravel()
+        cols = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols.append((xm**i) * (ym**j))
+        A = np.vstack(cols).T
+        coef, *_ = np.linalg.lstsq(A, z, rcond=None)
+        cols_full = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols_full.append((x**i) * (y**j))
+        A_full = np.stack(cols_full, axis=0)
+        fitted = np.tensordot(coef, A_full, axes=(0, 0))
+        return fitted
+
+    if mode != "none":
+        if mode == "self_fit" or project_dir is None or gain_db is None:
+            mean_src = mean_frame
+        else:
+            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
+                "measurement"
+            ].get("flat_lens_folder", "LensFlat")
+            ref_stack = load_image_stack(flat_folder)
+            mean_src = np.mean(ref_stack, axis=0)
+        if mode == "flat_frame":
+            gain_map = mean_src
+        else:
+            gain_map = _fit_gain(mean_src, mask, order)
         gain_map = np.where(gain_map == 0, 1e-6, gain_map)
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
@@ -671,6 +746,8 @@ def calculate_prnu_residual(
     flat_stack: np.ndarray,
     cfg: Dict[str, Any],
     rects: list[tuple[int, int, int, int]] | None = None,
+    project_dir: Path | str | None = None,
+    gain_db: float | None = None,
 ) -> Tuple[float, np.ndarray]:
     """Calculate PRNU residual from a flat-field stack.
 
@@ -701,11 +778,43 @@ def calculate_prnu_residual(
         dn_sat = calculate_dn_sat(flat_stack, cfg)
         mask &= mean_frame <= margin * dn_sat
 
-    apply_gain = cfg.get("processing", {}).get("apply_gain_map", False)
+    mode = cfg.get("processing", {}).get("gain_map_mode", "none")
     order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
 
-    if apply_gain:
-        gain_map = fit_gain_map(mean_frame, mask, order)
+    def _fit_gain(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
+        if order <= 0:
+            c = float(np.mean(frame[mask]))
+            return np.full_like(frame, c)
+        y, x = np.indices(frame.shape)
+        xm, ym = x[mask].ravel(), y[mask].ravel()
+        z = frame[mask].ravel()
+        cols = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols.append((xm**i) * (ym**j))
+        A = np.vstack(cols).T
+        coef, *_ = np.linalg.lstsq(A, z, rcond=None)
+        cols_full = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols_full.append((x**i) * (y**j))
+        A_full = np.stack(cols_full, axis=0)
+        fitted = np.tensordot(coef, A_full, axes=(0, 0))
+        return fitted
+
+    if mode != "none":
+        if mode == "self_fit" or project_dir is None or gain_db is None:
+            mean_src = mean_frame
+        else:
+            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
+                "measurement"
+            ].get("flat_lens_folder", "LensFlat")
+            ref_stack = load_image_stack(flat_folder)
+            mean_src = np.mean(ref_stack, axis=0)
+        if mode == "flat_frame":
+            gain_map = mean_src
+        else:
+            gain_map = _fit_gain(mean_src, mask, order)
         gain_map = np.where(gain_map == 0, 1e-6, gain_map)
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
