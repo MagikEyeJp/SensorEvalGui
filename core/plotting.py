@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, Any, Sequence
+import logging
 
 import matplotlib
 
 matplotlib.use("Agg")  # avoid GUI backend so plotting works inside threads
 import matplotlib.pyplot as plt
 import numpy as np
+
+from utils.logger import log_memory_usage
 
 from utils import config as cfgutil
 
@@ -71,12 +74,17 @@ def plot_snr_vs_signal_multi(
     output_path: Path,
 ):
     """Plot SNR–Signal curves for multiple gains."""
+    logging.info("plot_snr_vs_signal_multi: output=%s", output_path)
+    log_memory_usage("plot start: ")
 
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
     plt.figure()
 
     all_signals = []
     for gain, (sig, snr) in sorted(data.items()):
+        logging.debug(
+            "gain %.1f: sig shape=%s snr shape=%s", gain, sig.shape, snr.shape
+        )
         sig = _validate_positive_finite(sig, "signal")
         snr = _validate_positive_finite(snr, "snr")
         if sig.size == 1 or snr.size == 1:
@@ -105,6 +113,7 @@ def plot_snr_vs_signal_multi(
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()
+    log_memory_usage("plot end: ")
 
 
 def plot_snr_vs_exposure(
