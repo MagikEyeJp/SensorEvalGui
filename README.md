@@ -8,7 +8,7 @@ Evaluate image sensor performance (Dynamic Range, SNR curves, Exposure-dependent
 
 This project aims to:
 - Analyze image sensor TIFF stacks (gray chart, dark, flat) under varying exposure and gain
-- Compute key metrics: SNR, Dynamic Range, read noise, PRNU
+- Compute key metrics: SNR, Dynamic Range, read noise, PRNU residual
 - Provide real-time GUI visualization (PySide6 + matplotlib)
 - Export results as PNG graphs, summary text, CSV, and HTML report
 - Display the generated summary and graphs directly in the GUI
@@ -64,11 +64,14 @@ Run the GUI using `python main.py`
 ##📊 Outputs
 
 	•	📈 snr_signal.png: SNR vs Signal (DN)
-	•	📉 snr_exposure.png: SNR vs Exposure Ratio
+	•	📉 snr_exposure.png: SNR vs Exposure Time
         •       🟢 prnu_fit.png: PRNU regression
         •       🗺 dsnu_map.png: DSNU map
+        •       🗺 dsnu_map_scaled.png: DSNU map (scaled to 99th percentile)
         •       🗺 readnoise_map.png: Read noise map
-        •       🗺 prnu_residual_map.png: PRNU residual map
+        •       🗺 readnoise_map_scaled.png: Read noise map (scaled to 99th percentile)
+        •       🗺 prnu_residual_map.png: PRNU residual map (mean frame minus ROI average)
+        •       🗺 prnu_residual_map_scaled.png: PRNU residual map (scaled to 99th percentile)
         •       📋 summary.txt: Key evaluation metrics
         •       📄 report.html: Embedded HTML report
         •       📌 Metrics include SNR @ 50% and DN @ SNR=1 (0 dB)
@@ -83,6 +86,7 @@ For a comprehensive description of each output file, refer to
 	•	Configurable pipeline via default_config.yaml
 	•	Support for multi-gain and multi-exposure batch evaluation
 	•	PRNU and black-level correction logic
+        •       `gain_map_mode` normalizes the gain map by its mean for relative correction
 	•	Optional Excel/Markdown export
 	•	CI tests (PyTest + GitHub Actions)
 

@@ -9,12 +9,13 @@
 * 評価日、評価環境
 * ゲインリスト：\[0dB, 6dB, 12dB, 24dB] # <- 6dBおきに取った方望ましいため18dBも追加
 * 露光倍率リスト：\[1/16, 1/8, 1/4, 1/2, 1, 2, 4]
-* ADCのbit数など: ADC_bits, ADC_shift, ADC_FullScaleDN
+* ADCのbit数,シフト数,フルスケール: ADC_bits, ADC_shift, ADC_FullScaleDN = ((2^ADC_bits)-1) * 2^ADC_shift
 * 各条件における画像枚数（例：10）
 * 各種設定 (後述)
 
 ### 📝 画像データ
 Gainごとに下記画像セットを入力とする。それぞれ10枚以上。Gainと露出倍率の組み合わせはconfig.yamlにて定義(後述)
+露光時間は露出95%(configで設定可)を基準(exposure_ms)とする。Gain0dB以外は、exposure_ms / Gain倍率の露光時間で撮ること
 * フラット画像: レンズ付きフラット画像(露出:フルスケール95%など)
 * ダーク画像: 完全遮光画像
 * グレースケール画像:  11階調グレースケールチャート。レンズ付きフラット画像を撮った時の露光時間をx1倍とし、各種倍率の画像を用意
@@ -32,6 +33,7 @@ Gainごとに下記画像セットを入力とする。それぞれ10枚以上�
 
 #### 1. `summary.txt'
 センサ共通メタ情報、測定条件を先頭に出力
+
 Gainごとに下記項目を出力
 
 * **System Sensitivity (DN / μW·cm⁻²·s)**：フラット画像(各露光条件) のフラットROIの平均DNを、照度 power_uW_cm2（μW/cm²）×露光時間 exposure_ms（ms）x 露光倍率 で割って計算する。
@@ -42,12 +44,12 @@ Gainごとに下記項目を出力
     * フラット画像ROI平均DN
   * ※ 感度算出には DN\_sat は使用せず、Exp95%(sat_factorにて指定)で取得したフラット画像のフラットROIの平均値を用いる。DN\_sat 近傍は非線形性やノイズが増大するため不適。
 
-* **Pseudo PRNU (%)**：フラット画像（各露光条件）において、フラットROI内の各画素について時間方向（10枚）の標準偏差（σ）を算出し、それを空間方向に統計化（config.processing.stat\_mode に従い rms/mean/mad）する。さらに、ROI平均信号値で割って百分率表示（σ/μ × 100 \[%]）。
+* **Pseudo PRNU (%)**：フラット画像スタックを平均化し、ROI全体の平均を引いた残差マップを作成する。apply\_gain\_map が true の場合は plane\_fit\_order に従いゲインマップ補正を行った後に平均を取る。残差マップを config.processing.stat\_mode に従って統計化し、ROI 平均信号値で正規化して百分率表示する。
 
   * ゲイン補正の有無：config.processing.apply\_gain\_map
   * フィッティング法：config.processing.prnu\_fit（"LS" or "WLS"）※ μ-σ回帰を行う場合に適用
   * 使用回帰：config.processing.prnu\_fit（"LS" or "WLS"）
-    ※ Pseudo PRNU は処理構造として DSNU とほぼ同様であり、画像スタックに対して時間方向の統計を取り、空間方向に代表値（RMSなど）を算出する点で一致する。ただし PRNU は出力をROI内平均信号値で正規化する（σ/μ × 100 \[%]）。
+    ※ 平均フレームから ROI 平均を引いた残差の空間ばらつきを DSNU と同様の方法で統計化する。ただし PRNU は出力を ROI 平均信号値で正規化する（残差/μ × 100 \[%]）。
 * **DSNU (DN)**：遮光画像10枚を平均 → 各画素値の空間方向標準偏差（ROI内）を計算し、config.processing.stat\_mode に従って代表値を算出。
 * **Read Noise (DN)**：遮光画像10枚の時間方向標準偏差（各画素の時系列におけるstd）を計算し、空間方向にまとめる際に config.processing.stat\_mode に従って代表値（rms/mean/mad）を算出。
 
@@ -55,9 +57,8 @@ Gainごとに下記項目を出力
   * 差分法との切替（将来対応）：config.processing.read\_noise\_mode == 2 などで分岐予定
 * **DN\_sat (飽和DN)**：以下3方式の最大を採用：
 
-  1. フラット画像スタックの 99.9 パーセンタイル値
-  2. 最大DN値 / config.reference.sat\_factor
-  3. ADC最大値 × 0.90（将来config化）
+  1. フラット画像ROIの最大輝度ドットの 99.9 パーセンタイル値
+  2. ADC_FullScaleDN * config.reference.sat\_factor
 * **Dynamic Range (dB)**：最大信号値として DN\_sat を用い、Read Noise (DN) との比から 20\*log10(DN\_sat / Noise) を算出。
 * **SNR @ 50%**：グレースケールチャートまたはフラット画像で、Full-Wellの50%（例：32768 DN）に最も近いμとSNRの系列から、補間または回帰により推定して算出。
   * DN\_satの基準：config.reference.sat\_factor
@@ -89,7 +90,7 @@ GUIコンポーネント配置について
 ---------------------------------------  
 -[タブ切り替え]--------------------------  <-ここの境界は上下にドラッグ可能
 | グラフ表示エリア                       |
-| 項目ごとにタブでページ切り替え           |
+| グループ項目ごとにタブでページ切り替え     |
 | 必要に応じてスクロールバーあり           |
 |                                     |
 ---------------------------------------  
@@ -102,42 +103,59 @@ GUIコンポーネント配置について
 ### 📊 グラフ・可視化
 GUI上、および出力画像として出力
 
+グループ SNR-Signal
 * `snr_signal.png`：SNR vs Mean Signal（log-log軸）
   * 横軸：ROI平均信号（DN）
-  * 対象：Flat画像と Graychart画像の両方のROIを使用してμ-SNR系列を構成
+  * 対象：Flat画像と グレーチャート画像の両方のROIを使用してμ-SNR系列を構成
   * 縦軸：SNR（dB）
-  * 系列：露光倍率で色分け、ゲインで重ね描き
+  * 系列：Gainごと色分け
   * 補助線：理想曲線（√μ）、SNR=10dBライン
 
+グループ SNR-Exposure
 * `snr_exposure.png`：SNR vs Exposure Time（中間階調）
   * 横軸：露光時間（ms）。Graychart画像の他階調ROIも、中央階調に対するμの比から「擬似露光倍率」として換算し、クラウド状にマッピング可能。
   * 縦軸：SNR（dB）
   * 対象：グレースケール ROIの中央階調（config.reference.roi\_mid\_index）
   * 系列：ゲインごとに色分け
 
+グループ PRNU Fit
 * `prnu_fit.png`：μまたはμ² に対する標準偏差の回帰グラフ
   * 横軸：平均輝度（μ または μ²）
   * 縦軸：標準偏差 σ または σ²
   * 系列：ゲインごとに色分け（露光倍率も含めた全条件を使用）
   * 回帰法：OLS または WLS（config.processing.prnu\_fit）
 
+グループ DNSU MAP
 * `dsnu_map.png`：DSNU（遮光画像の画素間オフセット）マップ
   * 表示：ROI領域の空間分布
   * カラーマップ：ヒートマップ（logスケール／標準化あり）
-* `prnu_residual_map.png`：ゲイン補正後の固定パターンノイズ（空間ばらつき）
-  * 表示：Flat画像スタックの残差の空間分布（std or RMS）
-  * 補正前後で比較可能にしてもよい
+* `dsnu_map_scaled.png`：DSNUマップ（0〜99パーセンタイルスケール）
 
+グループ Readnoise MAP
 * `readnoise_map.png`：読み出しノイズの空間分布（Dark画像差分）
   * 表示：ROI内での時間方向標準偏差（各画素ごと）
   * 合成方法：10枚からのstd、または差分法
   * カラーマップ：ヒートマップ
+* `readnoise_map_scaled.png`：読み出しノイズマップ（0〜99パーセンタイルスケール）
+
+グループ  PRNU Residual
+* `prnu_residual_map.png`：ゲイン補正後の固定パターンノイズ（空間ばらつき）
+  * 表示：Flat画像スタックの残差の空間分布（std or RMS）
+  * 補正前後で比較可能にしてもよい
+* `prnu_residual_map_scaled.png`：PRNU残差マップ（0〜99パーセンタイルスケール）
+
+グループ  ROI area
+* `roi_area.png`：画像のROIの可視化
+  * グレーチャート画像、フラット画像、ダーク画像を横に並べ、それぞれのROIを矩形線でオーバーレイ描画する。それぞれの画像は露出時間倍率x1、Gain0dBのものを使用 (なければ近いもの)
 
 ---
 
 ### 🧾 HTMLレポート構成（`report.html`）
 
-出力ファイルの内容を全て網羅する
+ * 出力ファイルの内容を全て網羅する
+    * Summary.txtの内容
+    * 各グラフの内容
+
 ※ 画像PNGは base64 埋め込みに対応
 
 ---
@@ -195,7 +213,9 @@ processing:
   stat_mode: rms              # 'mean', 'rms', 'mad' から選択可能（分散合成・代表値算出に使用）
   snr_threshold_dB: 10       # SNR評価での可視限界（10dB など）
   min_sig_factor: 3           # σ_read の n倍以上を有効信号とみなす
-  apply_gain_map : false      # PRNUの算出時gain_map補正をするか
+  gain_map_mode : none        # self_fit | flat_fit | flat_frame | none
+                             # PRNUの算出時gain_map補正方法
+                             # ゲインマップは平均1に正規化して使用する
   prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
   plane_fit_order: 2          # ROI内傾斜補正次数
 
@@ -260,6 +280,7 @@ project_IMX273/                ← ここを “プロジェクトフォルダ�
  * Summaryとグラフを表示したあと、ウィンドウの横幅をグラフの大きさに合わせて自動リサイズ。その時Summary表示エリアとグラフ表示エリアの間のSplitterは、位置の初期値を高さの比率が1:3くらいにする
  * 出力フォルダの中身がすでにあった場合、各ファイルは上書きする
  * コマンドラインでprojectフォルダを指定すると、起動してすぐそのフォルダを読み込んで計算を始める
+
 
 ---
 ### 📌 特記事項

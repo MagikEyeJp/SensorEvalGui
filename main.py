@@ -9,11 +9,9 @@ from pathlib import Path
 
 from gui.main_window import MainWindow
 from utils.logger import setup_logging
-import faulthandler
 
 
 def main() -> None:
-    faulthandler.enable()
     setup_logging()
 
     disable_fh = False
@@ -23,15 +21,15 @@ def main() -> None:
     if os.environ.get("NO_FAULTHANDLER"):
         disable_fh = True
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project", help="Project folder to load", type=str)
+    args, qt_args = parser.parse_known_args()
+
     if not disable_fh:
         try:
             faulthandler.enable()
         except Exception as exc:  # pragma: no cover - fail safe
             logging.debug("Failed to enable faulthandler: %s", exc)
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--project", help="Project folder to load", type=str)
-    args, qt_args = parser.parse_known_args()
 
     logging.info("Application started")
     app = QApplication([sys.argv[0]] + qt_args)

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Sequence
 import logging
 import threading
 
@@ -46,6 +46,7 @@ from utils.logger import log_memory_usage
 pipeline_lock = threading.Lock()
 from core.analysis import (
     extract_roi_stats,
+    extract_roi_stats_gainmap,
     extract_roi_table,
     calculate_dark_noise,
     calculate_dark_noise_gain,
@@ -53,26 +54,31 @@ from core.analysis import (
     calculate_dynamic_range_dn,
     calculate_system_sensitivity,
     collect_mid_roi_snr,
+    collect_gain_snr_signal,
+    collect_prnu_points,
     calculate_dn_at_snr,
     calculate_snr_at_half,
     calculate_dn_at_snr_one,
-    calculate_pseudo_prnu,
+    calculate_prnu_residual,
 )
 from core.plotting import (
-    plot_snr_vs_signal,
+    plot_snr_vs_signal_multi,
     plot_snr_vs_exposure,
     plot_prnu_regression,
     plot_heatmap,
+    plot_roi_area,
 )
 from utils.roi import load_rois
 from core.report_gen import save_summary_txt, report_csv, report_html
-from core.loader import load_image_stack
+from core.loader import load_image_stack, load_first_frame
+from typing import Callable, Optional
 
 
 class EvalWorker(QThread):
     finished = Signal(dict)
     error = Signal(str)
     progress = Signal(int)
+    status = Signal(str)
 
     def __init__(self, project: Path, cfg: Dict[str, Any]):
         super().__init__()
@@ -83,22 +89,37 @@ class EvalWorker(QThread):
         try:
             logging.info("Evaluation worker started")
             log_memory_usage("before pipeline: ")
-            summary = run_pipeline(self.project, self.cfg)
+            result = run_pipeline(
+                self.project,
+                self.cfg,
+                progress=self.progress.emit,
+                status=self.status.emit,
+            )
             self.progress.emit(100)
             logging.info("Evaluation worker finished")
             log_memory_usage("after pipeline: ")
-            self.finished.emit(summary)
+            self.finished.emit(result)
         except Exception as e:  # pragma: no cover - UI error path
             logging.exception("Worker failed: %s", e)
             self.error.emit(str(e))
 
 
-def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
+def run_pipeline(
+    project: Path,
+    cfg: Dict[str, Any],
+    *,
+    progress: Optional[Callable[[int], None]] = None,
+    status: Optional[Callable[[str], None]] = None,
+) -> Dict[str, float]:
     """Run full analysis pipeline with logging and memory checks."""
     logging.info("Pipeline start: %s", project)
     with pipeline_lock:
         try:
             log_memory_usage("start: ")
+            if status:
+                status("Loading images...")
+            if progress:
+                progress(0)
 
             # 1. ROI-based statistics
             stats = extract_roi_stats(project, cfg)
@@ -106,11 +127,27 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 raise RuntimeError("No valid stacks found for analysis")
 
             log_memory_usage("after roi stats: ")
+            if progress:
+                progress(10)
             tuples = sorted(stats.items(), key=lambda kv: kv[1]["mean"])
             signals = np.array([kv[1]["mean"] for kv in tuples])
             noises = np.array([kv[1]["std"] for kv in tuples])
             snr_lin = signals / noises
             ratios = np.array([kv[0][1] for kv in tuples])
+
+            gain_mode = cfg.get("processing", {}).get("gain_map_mode", "none")
+            if gain_mode != "none":
+                stats_corr = extract_roi_stats_gainmap(project, cfg)
+                tuples_c = sorted(stats_corr.items(), key=lambda kv: kv[1]["mean"])
+                signals_corr = np.array([kv[1]["mean"] for kv in tuples_c])
+                noises_corr = np.array([kv[1]["std"] for kv in tuples_c])
+                prnu_stats = stats_corr
+            else:
+                signals_corr = signals
+                noises_corr = noises
+                prnu_stats = stats
+
+            prnu_data = collect_prnu_points(prnu_stats)
 
             roi_table = extract_roi_table(project, cfg)
             flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
@@ -126,8 +163,12 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             prnu_list = []
             sens_list = []
             per_gain: Dict[float, Dict[str, float]] = {}
+            gains_list = [g for g, _ in cfgutil.gain_entries(cfg)]
+            step = 60 / len(gains_list) if gains_list else 60
             first = True
-            for gain_db, _ in cfgutil.gain_entries(cfg):
+            for idx, (gain_db, _) in enumerate(cfgutil.gain_entries(cfg)):
+                if status:
+                    status(f"Processing gain {gain_db:.1f} dB")
                 logging.info("Processing gain %.1f dB", gain_db)
                 dsnu, rn, dsnu_map_tmp, rn_map_tmp = calculate_dark_noise_gain(
                     project, gain_db, cfg
@@ -147,9 +188,15 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                     tifffile.imwrite(
                         out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack
                     )
-                prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg, flat_rects)
+                prnu, prnu_map_tmp = calculate_prnu_residual(
+                    flat_stack, cfg, flat_rects, project, gain_db
+                )
+                gain_mult = cfgutil.gain_ratio(gain_db)
                 sens = calculate_system_sensitivity(
-                    flat_stack, cfg, flat_rects, ratio=1.0
+                    flat_stack,
+                    cfg,
+                    flat_rects,
+                    ratio=1.0 / gain_mult,
                 )
                 if first:
                     dsnu_map, rn_map, prnu_map = dsnu_map_tmp, rn_map_tmp, prnu_map_tmp
@@ -195,6 +242,8 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 prnu_list.append(prnu)
                 sens_list.append(sens)
                 log_memory_usage(f"after gain {gain_db}: ")
+                if progress:
+                    progress(int(10 + step * (idx + 1)))
 
             dsnu = float(np.mean(dsnu_list)) if dsnu_list else 0.0
             read_noise = float(np.mean(rn_list)) if rn_list else 0.0
@@ -208,6 +257,10 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
             dn_at_0 = calculate_dn_at_snr_one(signals, snr_lin)
 
             log_memory_usage("after metrics: ")
+            if progress:
+                progress(80)
+            if status:
+                status("Plotting graphs...")
 
             stats_rows = roi_table
             report_csv(stats_rows, cfg, out_dir / "roi_stats.csv")
@@ -228,27 +281,130 @@ def run_pipeline(project: Path, cfg: Dict[str, Any]) -> Dict[str, float]:
                 "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
             )
             exp_data = collect_mid_roi_snr(roi_table, mid_idx)
+            sig_data = collect_gain_snr_signal(roi_table, cfg)
 
-            plot_snr_vs_signal(signals, snr_lin, cfg, out_dir / "snr_signal.png")
-            plot_snr_vs_exposure(exp_data, cfg, out_dir / "snr_exposure.png")
-            plot_prnu_regression(signals, noises, cfg, out_dir / "prnu_fit.png")
-            plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
-            plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
-            plot_heatmap(prnu_map, "PRNU residual", out_dir / "prnu_residual_map.png")
+            logging.info("Plotting SNR vs Signal (multi)")
+            log_memory_usage("before snr_signal plot: ")
+            fig_snr_signal = plot_snr_vs_signal_multi(
+                sig_data, cfg, out_dir / "snr_signal.png", return_fig=True
+            )
+            log_memory_usage("after snr_signal plot: ")
+
+            logging.info("Plotting SNR vs Exposure")
+            log_memory_usage("before snr_exposure plot: ")
+            fig_snr_exposure = plot_snr_vs_exposure(
+                exp_data, cfg, out_dir / "snr_exposure.png", return_fig=True
+            )
+            log_memory_usage("after snr_exposure plot: ")
+
+            logging.info("Plotting PRNU regression")
+            log_memory_usage("before prnu_fit plot: ")
+            fig_prnu_fit = plot_prnu_regression(
+                prnu_data, cfg, out_dir / "prnu_fit.png", return_fig=True
+            )
+            log_memory_usage("after prnu_fit plot: ")
+
+            logging.info("Plotting noise maps")
+            log_memory_usage("before dsnu_map plot: ")
+            fig_dsnu_map = plot_heatmap(
+                dsnu_map, "DSNU map", out_dir / "dsnu_map.png", return_fig=True
+            )
+            fig_dsnu_map_scaled = plot_heatmap(
+                dsnu_map,
+                "DSNU map (scaled)",
+                out_dir / "dsnu_map_scaled.png",
+                vmin=0,
+                vmax=float(np.nanpercentile(dsnu_map, 99)),
+                return_fig=True,
+            )
+            log_memory_usage("after dsnu_map plot: ")
+            fig_rn_map = plot_heatmap(
+                rn_map, "Read noise map", out_dir / "readnoise_map.png", return_fig=True
+            )
+            fig_rn_map_scaled = plot_heatmap(
+                rn_map,
+                "Read noise map (scaled)",
+                out_dir / "readnoise_map_scaled.png",
+                vmin=0,
+                vmax=float(np.nanpercentile(rn_map, 99)),
+                return_fig=True,
+            )
+            fig_prnu_map = plot_heatmap(
+                prnu_map,
+                "PRNU residual",
+                out_dir / "prnu_residual_map.png",
+                return_fig=True,
+            )
+            fig_prnu_map_scaled = plot_heatmap(
+                prnu_map,
+                "PRNU residual (scaled)",
+                out_dir / "prnu_residual_map_scaled.png",
+                vmin=0,
+                vmax=float(np.nanpercentile(prnu_map, 99)),
+                return_fig=True,
+            )
+
+            fig_roi_area = None
+            try:
+                g0 = cfgutil.nearest_gain(cfg, 0.0)
+                r1 = cfgutil.nearest_exposure(cfg, 1.0)
+                chart_folder = cfgutil.find_exposure_folder(project, g0, r1, cfg)
+                chart_img = load_first_frame(chart_folder)
+                flat_folder = cfgutil.find_gain_folder(project, g0, cfg) / cfg[
+                    "measurement"
+                ].get("flat_lens_folder", "LensFlat")
+                flat_img = load_first_frame(flat_folder)
+                dark_folder = cfgutil.find_gain_folder(project, g0, cfg) / cfg[
+                    "measurement"
+                ].get("dark_folder", "dark")
+                dark_img = load_first_frame(dark_folder)
+                chart_rects = load_rois(project / cfg["measurement"]["chart_roi_file"])
+                flat_rects = load_rois(project / cfg["measurement"]["flat_roi_file"])
+                fig_roi_area = plot_roi_area(
+                    [chart_img, flat_img, dark_img],
+                    [chart_rects, flat_rects, flat_rects],
+                    ["Grayscale", "Flat", "Dark"],
+                    out_dir / "roi_area.png",
+                    return_fig=True,
+                )
+            except Exception as exc:  # pragma: no cover - optional
+                logging.info("ROI area plot failed: %s", exc)
+
             log_memory_usage("after plots: ")
+            if progress:
+                progress(90)
 
             graphs = {
                 "snr_signal": out_dir / "snr_signal.png",
                 "snr_exposure": out_dir / "snr_exposure.png",
                 "prnu_fit": out_dir / "prnu_fit.png",
                 "dsnu_map": out_dir / "dsnu_map.png",
+                "dsnu_map_scaled": out_dir / "dsnu_map_scaled.png",
                 "readnoise_map": out_dir / "readnoise_map.png",
+                "readnoise_map_scaled": out_dir / "readnoise_map_scaled.png",
                 "prnu_residual_map": out_dir / "prnu_residual_map.png",
+                "prnu_residual_map_scaled": out_dir / "prnu_residual_map_scaled.png",
+                "roi_area": out_dir / "roi_area.png",
             }
+            figures = {
+                "snr_signal": fig_snr_signal,
+                "snr_exposure": fig_snr_exposure,
+                "prnu_fit": fig_prnu_fit,
+                "dsnu_map": fig_dsnu_map,
+                "dsnu_map_scaled": fig_dsnu_map_scaled,
+                "readnoise_map": fig_rn_map,
+                "readnoise_map_scaled": fig_rn_map_scaled,
+                "prnu_residual_map": fig_prnu_map,
+                "prnu_residual_map_scaled": fig_prnu_map_scaled,
+            }
+            if fig_roi_area is not None:
+                figures["roi_area"] = fig_roi_area
             report_html(summary_avg, graphs, cfg, out_dir / "report.html")
+            if progress:
+                progress(100)
             logging.info("Pipeline completed")
             log_memory_usage("pipeline end: ")
-            return summary_avg
+            return {"summary": summary_avg, "figures": figures}
         except Exception as e:  # pragma: no cover - log path
             logging.exception("Pipeline error: %s", e)
             raise
@@ -280,6 +436,7 @@ class MainWindow(QMainWindow):
 
         self.summary_view = QTextEdit()
         self.summary_view.setReadOnly(True)
+        self.summary_view.setLineWrapMode(QTextEdit.NoWrap)
 
         self.graph_tabs = QTabWidget()
 
@@ -325,9 +482,17 @@ class MainWindow(QMainWindow):
         self.run_analysis()
 
     def run_analysis(self):
-        if self.project_dir is None or self.config is None:
+        if self.project_dir is None:
             QMessageBox.warning(self, "No Project", "Select a project folder first.")
             return
+        cfg_path = self.project_dir / "config.yaml"
+        if not cfg_path.is_file():
+            QMessageBox.critical(
+                self, "Error", "config.yaml not found in project folder"
+            )
+            return
+        # reload configuration fresh each run to avoid stale values
+        self.config = load_config(cfg_path)
         if self.worker is not None:
             return
         self.run_btn.setEnabled(False)
@@ -340,12 +505,13 @@ class MainWindow(QMainWindow):
         self.worker.finished.connect(self._analysis_done)
         self.worker.error.connect(self._analysis_error)
         self.worker.progress.connect(self.progress.setValue)
+        self.worker.status.connect(self.status.setText)
         self.worker.finished.connect(self._worker_finished)
         self.progress.setValue(0)
         self.worker.start()
 
     # ──────────────────────────────────────────── Core pipeline
-    def _analysis_done(self, summary: Dict[str, float]):
+    def _analysis_done(self, result: Dict[str, Any]):
         self.status.setText("Done ✅")
         self.progress.setValue(100)
         self.run_btn.setEnabled(True)
@@ -358,6 +524,9 @@ class MainWindow(QMainWindow):
             "output_dir", "output"
         )
 
+        summary = result.get("summary", {})
+        figures = result.get("figures", {})
+
         summary_path = out_dir / "summary.txt"
         if summary_path.is_file():
             text = summary_path.read_text(encoding="utf-8")
@@ -367,19 +536,20 @@ class MainWindow(QMainWindow):
 
         self.graph_tabs.clear()
 
-        graph_files = {
-            "SNR-Signal": "snr_signal.png",
-            "SNR-Exposure": "snr_exposure.png",
-            "PRNU Fit": "prnu_fit.png",
-            "DSNU Map": "dsnu_map.png",
-            "Readnoise Map": "readnoise_map.png",
-            "PRNU Residual": "prnu_residual_map.png",
+        graph_groups = {
+            "SNR-Signal": ["snr_signal"],
+            "SNR-Exposure": ["snr_exposure"],
+            "PRNU Fit": ["prnu_fit"],
+            "DSNU Map": ["dsnu_map", "dsnu_map_scaled"],
+            "Readnoise Map": ["readnoise_map", "readnoise_map_scaled"],
+            "PRNU Residual": ["prnu_residual_map", "prnu_residual_map_scaled"],
+            "ROI Area": ["roi_area"],
         }
 
-        for title, fname in graph_files.items():
-            path = out_dir / fname
-            if path.is_file():
-                widget = self._create_canvas(path)
+        for title, names in graph_groups.items():
+            figs_to_use = [figures[n] for n in names if n in figures]
+            if figs_to_use:
+                widget = self._create_canvas(figs_to_use)
                 self.graph_tabs.addTab(widget, title)
 
         self.resize(640, self.height())
@@ -387,24 +557,26 @@ class MainWindow(QMainWindow):
         self.splitter.setSizes([int(h * 0.25), int(h * 0.75)])
         self._refresh_canvas_geometry()
 
-    def _create_canvas(self, png_path: Path) -> QWidget:
-        """Return QWidget with interactive matplotlib canvas for the PNG."""
-        img = plt.imread(str(png_path))
-        fig = Figure(constrained_layout=True)
-        ax = fig.add_subplot(111)
-        ax.imshow(img)
-        ax.set_axis_off()
-        canvas = FigureCanvas(fig)
-        canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.canvases.append(canvas)
-        toolbar = NavigationToolbar2QT(canvas, None)
-        w = QWidget()
+    def _create_canvas(self, figures: Sequence[Figure]) -> QWidget:
+        """Return QWidget with interactive matplotlib canvases."""
+        w_container = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(toolbar)
-        layout.addWidget(canvas)
-        w.setLayout(layout)
-        return w
+
+        for fig in figures:
+            canvas = FigureCanvas(fig)
+            canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.canvases.append(canvas)
+            toolbar = NavigationToolbar2QT(canvas, None)
+            layout.addWidget(toolbar)
+            layout.addWidget(canvas)
+
+        w_container.setLayout(layout)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(False)
+        scroll.setWidget(w_container)
+        return scroll
 
     def _clear_canvases(self) -> None:
         """Close and delete existing matplotlib canvases."""

@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Tuple, Any, List
 import os
+import logging
 
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
@@ -18,6 +19,7 @@ from core.loader import load_image_stack
 
 __all__ = [
     "extract_roi_stats",
+    "extract_roi_stats_gainmap",
     "extract_roi_table",
     "calculate_snr_curve",
     "calculate_dynamic_range",
@@ -27,10 +29,14 @@ __all__ = [
     "calculate_dynamic_range_dn",
     "calculate_system_sensitivity",
     "collect_mid_roi_snr",
+    "collect_gain_snr_signal",
+    "collect_prnu_points",
     "calculate_dn_at_snr",
     "calculate_snr_at_half",
     "calculate_dn_at_snr_one",
+    "fit_gain_map",
     "calculate_pseudo_prnu",
+    "calculate_prnu_residual",
 ]
 
 # ───────────────────────────── internal helpers
@@ -43,6 +49,47 @@ def _mask_from_rects(
     for l, t, w, h in rects:
         mask[t : t + h, l : l + w] = True
     return mask
+
+
+def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
+    """Return a plane-fit gain map for ``frame`` using ``mask`` pixels.
+
+    Parameters
+    ----------
+    frame:
+        2-D array of pixel values to fit.
+    mask:
+        Boolean mask selecting pixels to include in the fit.
+    order:
+        Polynomial order of the surface. ``0`` gives a constant plane.
+
+    Returns
+    -------
+    np.ndarray
+        Fitted gain map matching ``frame`` shape.
+    """
+    if order <= 0:
+        c = float(np.mean(frame[mask]))
+        return np.full_like(frame, c)
+
+    y, x = np.indices(frame.shape)
+    xm, ym = x[mask].ravel(), y[mask].ravel()
+    z = frame[mask].ravel()
+
+    cols = []
+    for i in range(order + 1):
+        for j in range(order + 1 - i):
+            cols.append((xm**i) * (ym**j))
+    A = np.vstack(cols).T
+    coef, *_ = np.linalg.lstsq(A, z, rcond=None)
+
+    cols_full = []
+    for i in range(order + 1):
+        for j in range(order + 1 - i):
+            cols_full.append((x**i) * (y**j))
+    A_full = np.stack(cols_full, axis=0)
+    fitted = np.tensordot(coef, A_full, axes=(0, 0))
+    return fitted
 
 
 # ───────────────────────────── public api
@@ -73,6 +120,10 @@ def extract_roi_stats(
     chart_rects = load_rois(chart_roi_file)
     flat_rects = load_rois(flat_roi_file)
 
+    mid_idx = cfg.get("reference", {}).get(
+        "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
+    )
+
     snr_thresh = cfg["processing"].get("snr_threshold_dB", 10.0)
     min_sig_factor = cfg["processing"].get("min_sig_factor", 3.0)
     excl_low_snr = cfg["processing"].get("exclude_abnormal_snr", True)
@@ -82,24 +133,143 @@ def extract_roi_stats(
         for ratio, efold in cfgutil.exposure_entries(cfg):
             folder = project_dir / gfold / efold
             if not folder.is_dir():
+                logging.info("Skipping missing folder: %s", folder)
                 continue
+            logging.info(
+                "Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio
+            )
             stack = load_image_stack(folder)
             if debug_stacks:
                 tifffile.imwrite(folder / "stack_cache.tiff", stack)
 
             rects = chart_rects if "chart" in efold.lower() else flat_rects
-            mask = _mask_from_rects(stack.shape[1:], rects)
+            idx = mid_idx if "chart" in efold.lower() else 0
+            if idx >= len(rects):
+                idx = 0
+            mask = _mask_from_rects(stack.shape[1:], [rects[idx]])
             pix = stack[:, mask]
+            stat_mode = cfg["processing"].get("stat_mode", "rms")
             mean = float(np.mean(pix))
-            std = float(np.std(pix))
+            noise_pix = np.std(pix, axis=0)
+            std = float(_reduce(noise_pix, stat_mode))
             if std == 0:
+                logging.info("Skip due to zero std: %s", folder)
                 continue
             if mean < min_sig_factor * std:
+                logging.info(
+                    "Skip due to low signal: mean %.2f < %.2f × %.2f",
+                    mean,
+                    min_sig_factor,
+                    std,
+                )
                 continue
             snr = mean / std
             if excl_low_snr and snr < snr_thresh:
+                logging.info(
+                    "Skip due to low SNR: %.2f dB < %.2f dB",
+                    20 * np.log10(snr),
+                    snr_thresh,
+                )
                 continue
             res[(gain_db, ratio)] = {"mean": mean, "std": std, "snr": snr}
+    logging.info("Collected %d ROI stats", len(res))
+    return res
+
+
+def extract_roi_stats_gainmap(
+    project_dir: Path | str, cfg: Dict[str, Any]
+) -> Dict[Tuple[float, float], Dict[str, float]]:
+    """Compute ROI stats with gain-map correction applied."""
+    project_dir = Path(project_dir)
+    res: Dict[Tuple[float, float], Dict[str, float]] = {}
+
+    chart_roi_file = project_dir / cfg["measurement"]["chart_roi_file"]
+    flat_roi_file = project_dir / cfg["measurement"]["flat_roi_file"]
+    chart_rects = load_rois(chart_roi_file)
+    flat_rects = load_rois(flat_roi_file)
+
+    mid_idx = cfg.get("reference", {}).get(
+        "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
+    )
+
+    snr_thresh = cfg["processing"].get("snr_threshold_dB", 10.0)
+    min_sig_factor = cfg["processing"].get("min_sig_factor", 3.0)
+    excl_low_snr = cfg["processing"].get("exclude_abnormal_snr", True)
+    debug_stacks = cfg["output"].get("debug_stacks", False)
+    order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
+
+    mode = cfg.get("processing", {}).get("gain_map_mode", "none")
+    if mode == "none":
+        return extract_roi_stats(project_dir, cfg)
+
+    flat_cache: Dict[float, np.ndarray] = {}
+
+    for gain_db, gfold in cfgutil.gain_entries(cfg):
+        for ratio, efold in cfgutil.exposure_entries(cfg):
+            folder = project_dir / gfold / efold
+            if not folder.is_dir():
+                logging.info("Skipping missing folder: %s", folder)
+                continue
+            logging.info(
+                "Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio
+            )
+            stack = load_image_stack(folder)
+            if debug_stacks:
+                tifffile.imwrite(folder / "stack_cache.tiff", stack)
+
+            mask_fit = _mask_from_rects(stack.shape[1:], flat_rects)
+            if mode == "self_fit":
+                mean_src = np.mean(stack, axis=0)
+                gain_map = fit_gain_map(mean_src, mask_fit, order)
+            else:
+                flat_stack = flat_cache.get(gain_db)
+                if flat_stack is None:
+                    flat_folder = cfgutil.find_gain_folder(
+                        project_dir, gain_db, cfg
+                    ) / cfg["measurement"].get("flat_lens_folder", "LensFlat")
+                    flat_stack = load_image_stack(flat_folder)
+                    flat_cache[gain_db] = flat_stack
+                mean_src = np.mean(flat_stack, axis=0)
+                if mode == "flat_fit":
+                    gain_map = fit_gain_map(mean_src, mask_fit, order)
+                else:  # flat_frame
+                    gain_map = mean_src
+            gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+            gain_map_mean = np.mean(gain_map[mask_fit])
+            gain_map /= max(gain_map_mean, 1e-6)
+            corrected = stack / gain_map
+
+            rects = chart_rects if "chart" in efold.lower() else flat_rects
+            idx = mid_idx if "chart" in efold.lower() else 0
+            if idx >= len(rects):
+                idx = 0
+            mask = _mask_from_rects(stack.shape[1:], [rects[idx]])
+            pix = corrected[:, mask]
+            stat_mode = cfg["processing"].get("stat_mode", "rms")
+            mean = float(np.mean(pix))
+            noise_pix = np.std(pix, axis=0)
+            std = float(_reduce(noise_pix, stat_mode))
+            if std == 0:
+                logging.info("Skip due to zero std: %s", folder)
+                continue
+            if mean < min_sig_factor * std:
+                logging.info(
+                    "Skip due to low signal: mean %.2f < %.2f × %.2f",
+                    mean,
+                    min_sig_factor,
+                    std,
+                )
+                continue
+            snr = mean / std
+            if excl_low_snr and snr < snr_thresh:
+                logging.info(
+                    "Skip due to low SNR: %.2f dB < %.2f dB",
+                    20 * np.log10(snr),
+                    snr_thresh,
+                )
+                continue
+            res[(gain_db, ratio)] = {"mean": mean, "std": std, "snr": snr}
+    logging.info("Collected %d ROI stats (gain-corrected)", len(res))
     return res
 
 
@@ -144,11 +314,13 @@ def extract_roi_table(
             else:
                 roi_type = "flat"
                 rects = flat_rects
+            stat_mode = cfg["processing"].get("stat_mode", "rms")
             for i, r in enumerate(rects):
                 mask = _mask_from_rects(stack.shape[1:], [r])
                 pix = stack[:, mask]
                 mean = float(np.mean(pix))
-                std = float(np.std(pix))
+                noise_pix = np.std(pix, axis=0)
+                std = float(_reduce(noise_pix, stat_mode))
                 snr_db = float("nan") if std == 0 else float(20 * np.log10(mean / std))
                 rows.append(
                     {
@@ -201,6 +373,71 @@ def collect_mid_roi_snr(
     return res
 
 
+def collect_gain_snr_signal(
+    rows: List[Dict[str, Any]], cfg: Dict[str, Any]
+) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
+    """Return SNR curves indexed by signal level for each gain using ROI rows.
+
+    Parameters
+    ----------
+    rows:
+        ROI table rows from :func:`extract_roi_table`.
+    cfg:
+        Parsed configuration dictionary controlling filtering.
+
+    Returns
+    -------
+    Dict[float, tuple[np.ndarray, np.ndarray]]
+        Mapping of gain to arrays of signal levels and linear SNR values.
+    """
+
+    snr_thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
+    min_sig_factor = cfg.get("processing", {}).get("min_sig_factor", 3.0)
+    excl_low = cfg.get("processing", {}).get("exclude_abnormal_snr", True)
+
+    data: Dict[float, list[tuple[float, float]]] = {}
+    for row in rows:
+        mean = float(row.get("Mean", 0.0))
+        std = float(row.get("Std", 0.0))
+        if std == 0:
+            continue
+        if mean < min_sig_factor * std:
+            continue
+        snr = mean / std
+        if excl_low and 20 * np.log10(snr) < snr_thresh:
+            continue
+        gain = float(row.get("Gain (dB)", 0.0))
+        data.setdefault(gain, []).append((mean, snr))
+
+    res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
+    for gain, items in data.items():
+        items.sort(key=lambda x: x[0])
+        sig, s = zip(*items)
+        res[gain] = (np.array(sig), np.array(s))
+    return res
+
+
+def collect_prnu_points(
+    stats: Dict[tuple[float, float], Dict[str, float]],
+) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
+    """Return mean/std arrays per gain for PRNU regression."""
+
+    data: Dict[float, list[tuple[float, float]]] = {}
+    for (gain, _), vals in stats.items():
+        std = float(vals.get("std", 0.0))
+        if std == 0:
+            continue
+        mean = float(vals.get("mean", 0.0))
+        data.setdefault(gain, []).append((mean, std))
+
+    res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
+    for gain, items in data.items():
+        items.sort(key=lambda x: x[0])
+        m, s = zip(*items)
+        res[gain] = (np.array(m), np.array(s))
+    return res
+
+
 def calculate_snr_curve(
     signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]
 ) -> np.ndarray:
@@ -242,7 +479,8 @@ def calculate_dynamic_range(
     float
         Dynamic range in decibels based on the threshold crossing.
     """
-    thresh = cfg["processing"].get("snr_threshold_dB", 20.0)
+    thresh_db = cfg["processing"].get("snr_threshold_dB", 20.0)
+    thresh = 10 ** (thresh_db / 20)
     idx = np.where(snr >= thresh)[0]
     if idx.size == 0:
         return 0.0
@@ -402,6 +640,8 @@ def calculate_pseudo_prnu(
     flat_stack: np.ndarray,
     cfg: Dict[str, Any],
     rects: list[tuple[int, int, int, int]] | None = None,
+    project_dir: Path | str | None = None,
+    gain_db: float | None = None,
 ) -> Tuple[float, np.ndarray]:
     """Estimate pseudo-PRNU within the specified ROI.
 
@@ -432,33 +672,25 @@ def calculate_pseudo_prnu(
         dn_sat = calculate_dn_sat(flat_stack, cfg)
         mask &= mean_frame <= margin * dn_sat
 
-    apply_gain = cfg.get("processing", {}).get("apply_gain_map", False)
+    mode = cfg.get("processing", {}).get("gain_map_mode", "none")
     order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
 
-    def _fit_gain(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
-        if order <= 0:
-            c = float(np.mean(frame[mask]))
-            return np.full_like(frame, c)
-        y, x = np.indices(frame.shape)
-        xm, ym = x[mask].ravel(), y[mask].ravel()
-        z = frame[mask].ravel()
-        cols = []
-        for i in range(order + 1):
-            for j in range(order + 1 - i):
-                cols.append((xm**i) * (ym**j))
-        A = np.vstack(cols).T
-        coef, *_ = np.linalg.lstsq(A, z, rcond=None)
-        cols_full = []
-        for i in range(order + 1):
-            for j in range(order + 1 - i):
-                cols_full.append((x**i) * (y**j))
-        A_full = np.stack(cols_full, axis=0)
-        fitted = np.tensordot(coef, A_full, axes=(0, 0))
-        return fitted
-
-    if apply_gain:
-        gain_map = _fit_gain(mean_frame, mask, order)
+    if mode != "none":
+        if mode == "self_fit" or project_dir is None or gain_db is None:
+            mean_src = mean_frame
+        else:
+            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
+                "measurement"
+            ].get("flat_lens_folder", "LensFlat")
+            ref_stack = load_image_stack(flat_folder)
+            mean_src = np.mean(ref_stack, axis=0)
+        if mode == "flat_frame":
+            gain_map = mean_src
+        else:
+            gain_map = fit_gain_map(mean_src, mask, order)
         gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+        gain_map_mean = np.mean(gain_map[mask])
+        gain_map /= max(gain_map_mean, 1e-6)
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
         std_frame = np.std(corrected, axis=0)
@@ -470,6 +702,72 @@ def calculate_pseudo_prnu(
         _reduce(std_frame[mask], stat_mode) / max(mean_frame[mask].mean(), 1e-6) * 100.0
     )
     return value, std_frame
+
+
+def calculate_prnu_residual(
+    flat_stack: np.ndarray,
+    cfg: Dict[str, Any],
+    rects: list[tuple[int, int, int, int]] | None = None,
+    project_dir: Path | str | None = None,
+    gain_db: float | None = None,
+) -> Tuple[float, np.ndarray]:
+    """Calculate PRNU residual from a flat-field stack.
+
+    Parameters
+    ----------
+    flat_stack:
+        Stack of flat-field frames.
+    cfg:
+        Parsed configuration dictionary.
+    rects:
+        Optional ROI rectangles ``(left, top, width, height)``.
+
+    Returns
+    -------
+    Tuple[float, np.ndarray]
+        ``(prnu_percent, residual_map)`` where the residual map matches the image size.
+    """
+
+    mask = (
+        _mask_from_rects(flat_stack.shape[1:], rects)
+        if rects
+        else np.ones(flat_stack.shape[1:], bool)
+    )
+
+    mean_frame = np.mean(flat_stack, axis=0)
+    margin = cfg.get("processing", {}).get("mask_upper_margin")
+    if margin is not None:
+        dn_sat = calculate_dn_sat(flat_stack, cfg)
+        mask &= mean_frame <= margin * dn_sat
+
+    mode = cfg.get("processing", {}).get("gain_map_mode", "none")
+    order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
+
+    if mode != "none":
+        if mode == "self_fit" or project_dir is None or gain_db is None:
+            mean_src = mean_frame
+        else:
+            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
+                "measurement"
+            ].get("flat_lens_folder", "LensFlat")
+            ref_stack = load_image_stack(flat_folder)
+            mean_src = np.mean(ref_stack, axis=0)
+        if mode == "flat_frame":
+            gain_map = mean_src
+        else:
+            gain_map = fit_gain_map(mean_src, mask, order)
+        gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+        gain_map_mean = np.mean(gain_map[mask])
+        gain_map /= max(gain_map_mean, 1e-6)
+        corrected = flat_stack / gain_map
+        mean_frame = np.mean(corrected, axis=0)
+
+    roi_mean = float(np.mean(mean_frame[mask]))
+    residual_map = mean_frame - roi_mean
+
+    stat_mode = cfg.get("processing", {}).get("stat_mode", "rms")
+    value = _reduce(residual_map[mask], stat_mode) / max(roi_mean, 1e-6) * 100.0
+    return value, residual_map
 
 
 def calculate_system_sensitivity(
