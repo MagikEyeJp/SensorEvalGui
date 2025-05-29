@@ -47,7 +47,7 @@ processing:
   gain_map_mode: none              # self_fit | flat_fit | flat_frame | none
                                   # gain map is scaled by its maximum
   plane_fit_order: 2
-  read_noise_mode: 0
+  read_noise_mode: 0               # 0: use std of stack, 1: use std of frame diff / √2
   prnu_fit: LS
   exclude_abnormal_snr: true
 

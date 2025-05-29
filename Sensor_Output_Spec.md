@@ -58,7 +58,8 @@ Gainごとに下記項目を出力
 * **Read Noise (DN)**：遮光画像10枚の時間方向標準偏差（各画素の時系列におけるstd）を計算し、空間方向にまとめる際に config.processing.stat\_mode に従って代表値（rms/mean/mad）を算出。
 
   * 使用モード：config.processing.read\_noise\_mode
-  * 差分法との切替（将来対応）：config.processing.read\_noise\_mode == 2 などで分岐予定
+    * 0：スタック全体の標準偏差から計算（デフォルト）
+    * 1：フレーム間差分の標準偏差を √2 で割って計算
 * **DN\_sat (飽和DN)**：以下3方式の最大を採用：
 
   1. フラット画像ROIの最大輝度ドットの 99.9 パーセンタイル値
@@ -220,6 +221,7 @@ processing:
   gain_map_mode : none        # self_fit | flat_fit | flat_frame | none  PRNUの算出時gain_map補正方法
   prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
   plane_fit_order: 2          # ROI内傾斜補正次数
+  read_noise_mode: 0          # 0:スタックstd, 1:差分std/√2
 
 plot:
   exposures: [1.0, 0.0625]    # 図1に描画する露光倍率
