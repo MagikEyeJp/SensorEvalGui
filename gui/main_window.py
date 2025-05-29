@@ -378,7 +378,6 @@ class MainWindow(QMainWindow):
         self.summary_view = QTextEdit()
         self.summary_view.setReadOnly(True)
         self.summary_view.setLineWrapMode(QTextEdit.NoWrap)
-        self.summary_view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 
         self.graph_tabs = QTabWidget()
 
