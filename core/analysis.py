@@ -54,6 +54,8 @@ def _mask_from_rects(
 def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
     """Return a plane-fit gain map for ``frame`` using ``mask`` pixels.
 
+    The returned map is normalized so that the brightest masked pixel is ``1``.
+
     Parameters
     ----------
     frame:
@@ -70,25 +72,29 @@ def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
     """
     if order <= 0:
         c = float(np.mean(frame[mask]))
-        return np.full_like(frame, c)
+        fitted = np.full_like(frame, c)
+    else:
+        y, x = np.indices(frame.shape)
+        xm, ym = x[mask].ravel(), y[mask].ravel()
+        z = frame[mask].ravel()
 
-    y, x = np.indices(frame.shape)
-    xm, ym = x[mask].ravel(), y[mask].ravel()
-    z = frame[mask].ravel()
+        cols = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols.append((xm**i) * (ym**j))
+        A = np.vstack(cols).T
+        coef, *_ = np.linalg.lstsq(A, z, rcond=None)
 
-    cols = []
-    for i in range(order + 1):
-        for j in range(order + 1 - i):
-            cols.append((xm**i) * (ym**j))
-    A = np.vstack(cols).T
-    coef, *_ = np.linalg.lstsq(A, z, rcond=None)
+        cols_full = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols_full.append((x**i) * (y**j))
+        A_full = np.stack(cols_full, axis=0)
+        fitted = np.tensordot(coef, A_full, axes=(0, 0))
 
-    cols_full = []
-    for i in range(order + 1):
-        for j in range(order + 1 - i):
-            cols_full.append((x**i) * (y**j))
-    A_full = np.stack(cols_full, axis=0)
-    fitted = np.tensordot(coef, A_full, axes=(0, 0))
+    fitted = np.where(fitted == 0, 1e-6, fitted)
+    gain_max = np.max(fitted[mask])
+    fitted /= max(gain_max, 1e-6)
     return fitted
 
 
@@ -234,9 +240,10 @@ def extract_roi_stats_gainmap(
                     gain_map = fit_gain_map(mean_src, mask_fit, order)
                 else:  # flat_frame
                     gain_map = mean_src
-            gain_map = np.where(gain_map == 0, 1e-6, gain_map)
-            gain_map_mean = np.mean(gain_map[mask_fit])
-            gain_map /= max(gain_map_mean, 1e-6)
+            if mode == "flat_frame":
+                gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+                gain_max = np.max(gain_map[mask_fit])
+                gain_map /= max(gain_max, 1e-6)
             corrected = stack / gain_map
 
             rects = chart_rects if "chart" in efold.lower() else flat_rects
@@ -686,11 +693,11 @@ def calculate_pseudo_prnu(
             mean_src = np.mean(ref_stack, axis=0)
         if mode == "flat_frame":
             gain_map = mean_src
+            gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+            gain_max = np.max(gain_map[mask])
+            gain_map /= max(gain_max, 1e-6)
         else:
             gain_map = fit_gain_map(mean_src, mask, order)
-        gain_map = np.where(gain_map == 0, 1e-6, gain_map)
-        gain_map_mean = np.mean(gain_map[mask])
-        gain_map /= max(gain_map_mean, 1e-6)
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
         std_frame = np.std(corrected, axis=0)
@@ -754,11 +761,11 @@ def calculate_prnu_residual(
             mean_src = np.mean(ref_stack, axis=0)
         if mode == "flat_frame":
             gain_map = mean_src
+            gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+            gain_max = np.max(gain_map[mask])
+            gain_map /= max(gain_max, 1e-6)
         else:
             gain_map = fit_gain_map(mean_src, mask, order)
-        gain_map = np.where(gain_map == 0, 1e-6, gain_map)
-        gain_map_mean = np.mean(gain_map[mask])
-        gain_map /= max(gain_map_mean, 1e-6)
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
 
