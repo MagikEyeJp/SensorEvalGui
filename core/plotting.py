@@ -113,10 +113,9 @@ def plot_snr_vs_exposure(
             labels = [ratio for ratio, _ in cfgutil.exposure_entries(cfg)]
         except KeyError:
             labels = []
-    label_strs = _auto_labels(labels)
-
     base_ms = float(cfg.get("illumination", {}).get("exposure_ms", 1.0))
     xticks = base_ms * np.array(labels)
+    label_strs = [f"{t:g}" for t in xticks]
 
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
 
@@ -125,8 +124,15 @@ def plot_snr_vs_exposure(
         ratios = _validate_positive_finite(ratios, "exposure ratios")
         snr = _validate_positive_finite(snr, "snr")
         snr_db = 20 * np.log10(snr)
-        times = base_ms * ratios
-        plt.semilogx(times, snr_db, marker="s", linestyle="-", label=f"{gain:g} dB")
+        gain_mult = cfgutil.gain_ratio(gain)
+        times = base_ms * ratios / gain_mult
+        plt.semilogx(
+            times,
+            snr_db,
+            marker="s",
+            linestyle="-",
+            label=f"{gain:g} dB",
+        )
     plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
     plt.xticks(xticks, label_strs, rotation=45)
     plt.xlabel("Exposure Time (ms)")
