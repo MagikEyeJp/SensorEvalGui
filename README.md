@@ -8,7 +8,7 @@ Evaluate image sensor performance (Dynamic Range, SNR curves, Exposure-dependent
 
 This project aims to:
 - Analyze image sensor TIFF stacks (gray chart, dark, flat) under varying exposure and gain
-- Compute key metrics: SNR, Dynamic Range, read noise, PRNU
+- Compute key metrics: SNR, Dynamic Range, read noise, PRNU residual
 - Provide real-time GUI visualization (PySide6 + matplotlib)
 - Export results as PNG graphs, summary text, CSV, and HTML report
 - Display the generated summary and graphs directly in the GUI
@@ -70,7 +70,7 @@ Run the GUI using `python main.py`
         •       🗺 dsnu_map_scaled.png: DSNU map (scaled to 99th percentile)
         •       🗺 readnoise_map.png: Read noise map
         •       🗺 readnoise_map_scaled.png: Read noise map (scaled to 99th percentile)
-        •       🗺 prnu_residual_map.png: PRNU residual map
+        •       🗺 prnu_residual_map.png: PRNU residual map (mean frame minus ROI average)
         •       🗺 prnu_residual_map_scaled.png: PRNU residual map (scaled to 99th percentile)
         •       📋 summary.txt: Key evaluation metrics
         •       📄 report.html: Embedded HTML report

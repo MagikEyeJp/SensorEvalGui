@@ -44,12 +44,12 @@ Gainごとに下記項目を出力
     * フラット画像ROI平均DN
   * ※ 感度算出には DN\_sat は使用せず、Exp95%(sat_factorにて指定)で取得したフラット画像のフラットROIの平均値を用いる。DN\_sat 近傍は非線形性やノイズが増大するため不適。
 
-* **Pseudo PRNU (%)**：フラット画像（各露光条件）において、フラットROI内の各画素について時間方向（10枚）の標準偏差（σ）を算出し、それを空間方向に統計化（config.processing.stat\_mode に従い rms/mean/mad）する。さらに、ROI平均信号値で割って百分率表示（σ/μ × 100 \[%]）。
+* **Pseudo PRNU (%)**：フラット画像スタックを平均化し、ROI全体の平均を引いた残差マップを作成する。apply\_gain\_map が true の場合は plane\_fit\_order に従いゲインマップ補正を行った後に平均を取る。残差マップを config.processing.stat\_mode に従って統計化し、ROI 平均信号値で正規化して百分率表示する。
 
   * ゲイン補正の有無：config.processing.apply\_gain\_map
   * フィッティング法：config.processing.prnu\_fit（"LS" or "WLS"）※ μ-σ回帰を行う場合に適用
   * 使用回帰：config.processing.prnu\_fit（"LS" or "WLS"）
-    ※ Pseudo PRNU は処理構造として DSNU とほぼ同様であり、画像スタックに対して時間方向の統計を取り、空間方向に代表値（RMSなど）を算出する点で一致する。ただし PRNU は出力をROI内平均信号値で正規化する（σ/μ × 100 \[%]）。
+    ※ 平均フレームから ROI 平均を引いた残差の空間ばらつきを DSNU と同様の方法で統計化する。ただし PRNU は出力を ROI 平均信号値で正規化する（残差/μ × 100 \[%]）。
 * **DSNU (DN)**：遮光画像10枚を平均 → 各画素値の空間方向標準偏差（ROI内）を計算し、config.processing.stat\_mode に従って代表値を算出。
 * **Read Noise (DN)**：遮光画像10枚の時間方向標準偏差（各画素の時系列におけるstd）を計算し、空間方向にまとめる際に config.processing.stat\_mode に従って代表値（rms/mean/mad）を算出。
 
