@@ -45,8 +45,12 @@ Gainごとに下記項目を出力
   * ※ 感度算出には DN\_sat は使用せず、Exp95%(sat_factorにて指定)で取得したフラット画像のフラットROIの平均値を用いる。DN\_sat 近傍は非線形性やノイズが増大するため不適。
 
 * **Pseudo PRNU (%)**：フラット画像スタックを平均化し、ROI全体の平均を引いた残差マップを作成する。apply\_gain\_map が true の場合は plane\_fit\_order に従いゲインマップ補正を行った後に平均を取る。残差マップを config.processing.stat\_mode に従って統計化し、ROI 平均信号値で正規化して百分率表示する。
-
-  * ゲイン補正の有無：config.processing.apply\_gain\_map
+  ゲインマップは画像の照度ムラを補正するものであり、画像の一番明るい値で正規化して作成する
+  * ゲインマップ補正の方法: gain_map_mode ("self_fit"or"flat_fit"or"flat_frame"or"none")
+    * self_fitはそれぞれの画像スタック平均値を平面フィットさせてマップを作成
+    * flat_fitはそのGainのフラット画像スタック平均値を平面フィットさせてマップを作成
+    * flat_frameはそのGainのフラット画像スタックの平均値を正規化してマップを作成
+    * noneはゲインマップ補正なし
   * フィッティング法：config.processing.prnu\_fit（"LS" or "WLS"）※ μ-σ回帰を行う場合に適用
   * 使用回帰：config.processing.prnu\_fit（"LS" or "WLS"）
     ※ 平均フレームから ROI 平均を引いた残差の空間ばらつきを DSNU と同様の方法で統計化する。ただし PRNU は出力を ROI 平均信号値で正規化する（残差/μ × 100 \[%]）。
@@ -213,9 +217,7 @@ processing:
   stat_mode: rms              # 'mean', 'rms', 'mad' から選択可能（分散合成・代表値算出に使用）
   snr_threshold_dB: 10       # SNR評価での可視限界（10dB など）
   min_sig_factor: 3           # σ_read の n倍以上を有効信号とみなす
-  gain_map_mode : none        # self_fit | flat_fit | flat_frame | none
-                             # PRNUの算出時gain_map補正方法
-                             # ゲインマップは平均1に正規化して使用する
+  gain_map_mode : none        # self_fit | flat_fit | flat_frame | none  PRNUの算出時gain_map補正方法
   prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
   plane_fit_order: 2          # ROI内傾斜補正次数
 
