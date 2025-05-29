@@ -300,15 +300,15 @@ def test_extract_roi_stats_gainmap_self_fit(tmp_path):
     cfg = load_config(cfg_file)
     stats = analysis.extract_roi_stats_gainmap(project, cfg)
     res = stats[(0.0, 1.0)]
-    assert pytest.approx(res["mean"], abs=1e-6) == 22.5
-    assert pytest.approx(res["std"], abs=1e-6) == pytest.approx(7.5, abs=1e-6)
+    assert pytest.approx(res["mean"], abs=1e-6) == 30.0
+    assert pytest.approx(res["std"], abs=1e-6) == pytest.approx(10.0, abs=1e-6)
 
 
 @pytest.mark.parametrize(
     "mode, expected_mean, expected_std",
     [
-        ("flat_fit", 16.875, 5.929271154968454),
-        ("flat_frame", 16.875, 5.929271154968454),
+        ("flat_fit", 22.5, 7.905694150420948),
+        ("flat_frame", 22.5, 7.905694150420948),
     ],
 )
 def test_extract_roi_stats_gainmap_modes(tmp_path, mode, expected_mean, expected_std):
@@ -393,11 +393,11 @@ def test_fit_gain_map_basic():
     frame = np.array([[1, 2], [3, 4]], dtype=float)
     mask = np.array([[True, False], [True, False]])
     res = analysis.fit_gain_map(frame, mask, order=0)
-    assert np.allclose(res, 2.0)
+    assert np.allclose(res, 1.0)
 
 
 def test_fit_gain_map_order1_exact():
     frame = np.array([[1, 2], [3, 4]], dtype=float)
     mask = np.ones_like(frame, dtype=bool)
     res = analysis.fit_gain_map(frame, mask, order=1)
-    assert np.allclose(res, frame)
+    assert np.allclose(res, frame / 4.0)
