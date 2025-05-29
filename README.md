@@ -67,8 +67,11 @@ Run the GUI using `python main.py`
 	•	📉 snr_exposure.png: SNR vs Exposure Time
         •       🟢 prnu_fit.png: PRNU regression
         •       🗺 dsnu_map.png: DSNU map
+        •       🗺 dsnu_map_scaled.png: DSNU map (scaled to 99th percentile)
         •       🗺 readnoise_map.png: Read noise map
+        •       🗺 readnoise_map_scaled.png: Read noise map (scaled to 99th percentile)
         •       🗺 prnu_residual_map.png: PRNU residual map
+        •       🗺 prnu_residual_map_scaled.png: PRNU residual map (scaled to 99th percentile)
         •       📋 summary.txt: Key evaluation metrics
         •       📄 report.html: Embedded HTML report
         •       📌 Metrics include SNR @ 50% and DN @ SNR=1 (0 dB)

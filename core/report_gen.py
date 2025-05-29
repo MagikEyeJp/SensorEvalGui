@@ -145,8 +145,11 @@ def report_html(
         "snr_exposure",
         "prnu_fit",
         "dsnu_map",
+        "dsnu_map_scaled",
         "readnoise_map",
+        "readnoise_map_scaled",
         "prnu_residual_map",
+        "prnu_residual_map_scaled",
         "roi_area",
     ]:
         if key in graphs and graphs[key].exists():
