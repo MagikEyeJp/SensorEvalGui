@@ -89,7 +89,7 @@ class EvalWorker(QThread):
         try:
             logging.info("Evaluation worker started")
             log_memory_usage("before pipeline: ")
-            summary = run_pipeline(
+            result = run_pipeline(
                 self.project,
                 self.cfg,
                 progress=self.progress.emit,
@@ -98,7 +98,7 @@ class EvalWorker(QThread):
             self.progress.emit(100)
             logging.info("Evaluation worker finished")
             log_memory_usage("after pipeline: ")
-            self.finished.emit(summary)
+            self.finished.emit(result)
         except Exception as e:  # pragma: no cover - UI error path
             logging.exception("Worker failed: %s", e)
             self.error.emit(str(e))
@@ -285,47 +285,66 @@ def run_pipeline(
 
             logging.info("Plotting SNR vs Signal (multi)")
             log_memory_usage("before snr_signal plot: ")
-            plot_snr_vs_signal_multi(sig_data, cfg, out_dir / "snr_signal.png")
+            fig_snr_signal = plot_snr_vs_signal_multi(
+                sig_data, cfg, out_dir / "snr_signal.png", return_fig=True
+            )
             log_memory_usage("after snr_signal plot: ")
 
             logging.info("Plotting SNR vs Exposure")
             log_memory_usage("before snr_exposure plot: ")
-            plot_snr_vs_exposure(exp_data, cfg, out_dir / "snr_exposure.png")
+            fig_snr_exposure = plot_snr_vs_exposure(
+                exp_data, cfg, out_dir / "snr_exposure.png", return_fig=True
+            )
             log_memory_usage("after snr_exposure plot: ")
 
             logging.info("Plotting PRNU regression")
             log_memory_usage("before prnu_fit plot: ")
-            plot_prnu_regression(prnu_data, cfg, out_dir / "prnu_fit.png")
+            fig_prnu_fit = plot_prnu_regression(
+                prnu_data, cfg, out_dir / "prnu_fit.png", return_fig=True
+            )
             log_memory_usage("after prnu_fit plot: ")
 
             logging.info("Plotting noise maps")
             log_memory_usage("before dsnu_map plot: ")
-            plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png")
-            plot_heatmap(
+            fig_dsnu_map = plot_heatmap(
+                dsnu_map, "DSNU map", out_dir / "dsnu_map.png", return_fig=True
+            )
+            fig_dsnu_map_scaled = plot_heatmap(
                 dsnu_map,
                 "DSNU map (scaled)",
                 out_dir / "dsnu_map_scaled.png",
                 vmin=0,
                 vmax=float(np.nanpercentile(dsnu_map, 99)),
+                return_fig=True,
             )
             log_memory_usage("after dsnu_map plot: ")
-            plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png")
-            plot_heatmap(
+            fig_rn_map = plot_heatmap(
+                rn_map, "Read noise map", out_dir / "readnoise_map.png", return_fig=True
+            )
+            fig_rn_map_scaled = plot_heatmap(
                 rn_map,
                 "Read noise map (scaled)",
                 out_dir / "readnoise_map_scaled.png",
                 vmin=0,
                 vmax=float(np.nanpercentile(rn_map, 99)),
+                return_fig=True,
             )
-            plot_heatmap(prnu_map, "PRNU residual", out_dir / "prnu_residual_map.png")
-            plot_heatmap(
+            fig_prnu_map = plot_heatmap(
+                prnu_map,
+                "PRNU residual",
+                out_dir / "prnu_residual_map.png",
+                return_fig=True,
+            )
+            fig_prnu_map_scaled = plot_heatmap(
                 prnu_map,
                 "PRNU residual (scaled)",
                 out_dir / "prnu_residual_map_scaled.png",
                 vmin=0,
                 vmax=float(np.nanpercentile(prnu_map, 99)),
+                return_fig=True,
             )
 
+            fig_roi_area = None
             try:
                 g0 = cfgutil.nearest_gain(cfg, 0.0)
                 r1 = cfgutil.nearest_exposure(cfg, 1.0)
@@ -341,11 +360,12 @@ def run_pipeline(
                 dark_img = load_first_frame(dark_folder)
                 chart_rects = load_rois(project / cfg["measurement"]["chart_roi_file"])
                 flat_rects = load_rois(project / cfg["measurement"]["flat_roi_file"])
-                plot_roi_area(
+                fig_roi_area = plot_roi_area(
                     [chart_img, flat_img, dark_img],
                     [chart_rects, flat_rects, flat_rects],
                     ["Grayscale", "Flat", "Dark"],
                     out_dir / "roi_area.png",
+                    return_fig=True,
                 )
             except Exception as exc:  # pragma: no cover - optional
                 logging.info("ROI area plot failed: %s", exc)
@@ -366,12 +386,25 @@ def run_pipeline(
                 "prnu_residual_map_scaled": out_dir / "prnu_residual_map_scaled.png",
                 "roi_area": out_dir / "roi_area.png",
             }
+            figures = {
+                "snr_signal": fig_snr_signal,
+                "snr_exposure": fig_snr_exposure,
+                "prnu_fit": fig_prnu_fit,
+                "dsnu_map": fig_dsnu_map,
+                "dsnu_map_scaled": fig_dsnu_map_scaled,
+                "readnoise_map": fig_rn_map,
+                "readnoise_map_scaled": fig_rn_map_scaled,
+                "prnu_residual_map": fig_prnu_map,
+                "prnu_residual_map_scaled": fig_prnu_map_scaled,
+            }
+            if fig_roi_area is not None:
+                figures["roi_area"] = fig_roi_area
             report_html(summary_avg, graphs, cfg, out_dir / "report.html")
             if progress:
                 progress(100)
             logging.info("Pipeline completed")
             log_memory_usage("pipeline end: ")
-            return summary_avg
+            return {"summary": summary_avg, "figures": figures}
         except Exception as e:  # pragma: no cover - log path
             logging.exception("Pipeline error: %s", e)
             raise
@@ -478,7 +511,7 @@ class MainWindow(QMainWindow):
         self.worker.start()
 
     # ──────────────────────────────────────────── Core pipeline
-    def _analysis_done(self, summary: Dict[str, float]):
+    def _analysis_done(self, result: Dict[str, Any]):
         self.status.setText("Done ✅")
         self.progress.setValue(100)
         self.run_btn.setEnabled(True)
@@ -491,6 +524,9 @@ class MainWindow(QMainWindow):
             "output_dir", "output"
         )
 
+        summary = result.get("summary", {})
+        figures = result.get("figures", {})
+
         summary_path = out_dir / "summary.txt"
         if summary_path.is_file():
             text = summary_path.read_text(encoding="utf-8")
@@ -501,22 +537,19 @@ class MainWindow(QMainWindow):
         self.graph_tabs.clear()
 
         graph_groups = {
-            "SNR-Signal": ["snr_signal.png"],
-            "SNR-Exposure": ["snr_exposure.png"],
-            "PRNU Fit": ["prnu_fit.png"],
-            "DSNU Map": ["dsnu_map.png", "dsnu_map_scaled.png"],
-            "Readnoise Map": ["readnoise_map.png", "readnoise_map_scaled.png"],
-            "PRNU Residual": [
-                "prnu_residual_map.png",
-                "prnu_residual_map_scaled.png",
-            ],
-            "ROI Area": ["roi_area.png"],
+            "SNR-Signal": ["snr_signal"],
+            "SNR-Exposure": ["snr_exposure"],
+            "PRNU Fit": ["prnu_fit"],
+            "DSNU Map": ["dsnu_map", "dsnu_map_scaled"],
+            "Readnoise Map": ["readnoise_map", "readnoise_map_scaled"],
+            "PRNU Residual": ["prnu_residual_map", "prnu_residual_map_scaled"],
+            "ROI Area": ["roi_area"],
         }
 
         for title, names in graph_groups.items():
-            paths = [out_dir / n for n in names if (out_dir / n).is_file()]
-            if paths:
-                widget = self._create_canvas(paths)
+            figs_to_use = [figures[n] for n in names if n in figures]
+            if figs_to_use:
+                widget = self._create_canvas(figs_to_use)
                 self.graph_tabs.addTab(widget, title)
 
         self.resize(640, self.height())
@@ -524,30 +557,20 @@ class MainWindow(QMainWindow):
         self.splitter.setSizes([int(h * 0.25), int(h * 0.75)])
         self._refresh_canvas_geometry()
 
-    def _create_canvas(self, png_paths: Sequence[Path]) -> QWidget:
-        """Return QWidget with interactive matplotlib canvas for the PNGs."""
-        imgs = [plt.imread(str(p)) for p in png_paths]
-        n = len(imgs)
-        fig = Figure(constrained_layout=True)
-        axes = fig.subplots(1, n)
-        if n == 1:
-            axes = [axes]
-        for ax, img in zip(axes, imgs):
-            ax.imshow(img)
-            ax.set_axis_off()
-        canvas = FigureCanvas(fig)
-        canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        height = max(img.shape[0] for img in imgs)
-        width = sum(img.shape[1] for img in imgs)
-        canvas.setMinimumSize(width, height)
-        self.canvases.append(canvas)
-        toolbar = NavigationToolbar2QT(canvas, None)
-
+    def _create_canvas(self, figures: Sequence[Figure]) -> QWidget:
+        """Return QWidget with interactive matplotlib canvases."""
         w_container = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(toolbar)
-        layout.addWidget(canvas)
+
+        for fig in figures:
+            canvas = FigureCanvas(fig)
+            canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.canvases.append(canvas)
+            toolbar = NavigationToolbar2QT(canvas, None)
+            layout.addWidget(toolbar)
+            layout.addWidget(canvas)
+
         w_container.setLayout(layout)
 
         scroll = QScrollArea()
