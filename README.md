@@ -86,6 +86,7 @@ For a comprehensive description of each output file, refer to
 	•	Configurable pipeline via default_config.yaml
 	•	Support for multi-gain and multi-exposure batch evaluation
 	•	PRNU and black-level correction logic
+        •       `gain_map_mode` normalizes the gain map by its mean for relative correction
 	•	Optional Excel/Markdown export
 	•	CI tests (PyTest + GitHub Actions)
 
