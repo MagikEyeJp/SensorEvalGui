@@ -64,7 +64,7 @@ Run the GUI using `python main.py`
 ##📊 Outputs
 
 	•	📈 snr_signal.png: SNR vs Signal (DN)
-	•	📉 snr_exposure.png: SNR vs Exposure Ratio
+	•	📉 snr_exposure.png: SNR vs Exposure Time
         •       🟢 prnu_fit.png: PRNU regression
         •       🗺 dsnu_map.png: DSNU map
         •       🗺 readnoise_map.png: Read noise map
