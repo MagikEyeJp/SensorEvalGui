@@ -57,3 +57,15 @@ def test_plot_roi_area(tmp_path):
         [img, img, img], rects, ["a", "b", "c"], tmp_path / "roi.png"
     )
     assert (tmp_path / "roi.png").is_file()
+
+
+def test_plot_heatmap_vmin_vmax(tmp_path):
+    data = np.arange(4).reshape(2, 2)
+    plotting.plot_heatmap(
+        data,
+        "heat",
+        tmp_path / "heat.png",
+        vmin=0.0,
+        vmax=3.0,
+    )
+    assert (tmp_path / "heat.png").is_file()
