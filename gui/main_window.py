@@ -59,7 +59,7 @@ from core.analysis import (
     calculate_dn_at_snr,
     calculate_snr_at_half,
     calculate_dn_at_snr_one,
-    calculate_pseudo_prnu,
+    calculate_prnu_residual,
 )
 from core.plotting import (
     plot_snr_vs_signal_multi,
@@ -188,7 +188,9 @@ def run_pipeline(
                     tifffile.imwrite(
                         out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack
                     )
-                prnu, prnu_map_tmp = calculate_pseudo_prnu(flat_stack, cfg, flat_rects)
+                prnu, prnu_map_tmp = calculate_prnu_residual(
+                    flat_stack, cfg, flat_rects
+                )
                 gain_mult = cfgutil.gain_ratio(gain_db)
                 sens = calculate_system_sensitivity(
                     flat_stack,

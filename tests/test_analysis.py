@@ -301,3 +301,19 @@ def test_extract_roi_stats_gainmap(tmp_path):
     res = stats[(0.0, 1.0)]
     assert pytest.approx(res["mean"], abs=1e-6) == 1.0
     assert pytest.approx(res["std"], abs=1e-6) == pytest.approx(1.0 / 3.0, abs=1e-6)
+
+
+def test_calculate_prnu_residual_simple():
+    stack = np.array(
+        [
+            [[1, 2], [3, 4]],
+            [[1, 2], [3, 4]],
+        ],
+        dtype=np.uint16,
+    )
+    cfg = {"processing": {"apply_gain_map": False, "stat_mode": "rms"}}
+    val, res = analysis.calculate_prnu_residual(stack, cfg)
+    expected = np.array([[1, 2], [3, 4]], dtype=float) - 2.5
+    assert res.shape == (2, 2)
+    assert np.allclose(res, expected)
+    assert pytest.approx(val, abs=1e-6) == np.sqrt(np.mean(expected**2)) / 2.5 * 100.0

@@ -35,6 +35,7 @@ __all__ = [
     "calculate_snr_at_half",
     "calculate_dn_at_snr_one",
     "calculate_pseudo_prnu",
+    "calculate_prnu_residual",
 ]
 
 # ───────────────────────────── internal helpers
@@ -664,6 +665,78 @@ def calculate_pseudo_prnu(
         _reduce(std_frame[mask], stat_mode) / max(mean_frame[mask].mean(), 1e-6) * 100.0
     )
     return value, std_frame
+
+
+def calculate_prnu_residual(
+    flat_stack: np.ndarray,
+    cfg: Dict[str, Any],
+    rects: list[tuple[int, int, int, int]] | None = None,
+) -> Tuple[float, np.ndarray]:
+    """Calculate PRNU residual from a flat-field stack.
+
+    Parameters
+    ----------
+    flat_stack:
+        Stack of flat-field frames.
+    cfg:
+        Parsed configuration dictionary.
+    rects:
+        Optional ROI rectangles ``(left, top, width, height)``.
+
+    Returns
+    -------
+    Tuple[float, np.ndarray]
+        ``(prnu_percent, residual_map)`` where the residual map matches the image size.
+    """
+
+    mask = (
+        _mask_from_rects(flat_stack.shape[1:], rects)
+        if rects
+        else np.ones(flat_stack.shape[1:], bool)
+    )
+
+    mean_frame = np.mean(flat_stack, axis=0)
+    margin = cfg.get("processing", {}).get("mask_upper_margin")
+    if margin is not None:
+        dn_sat = calculate_dn_sat(flat_stack, cfg)
+        mask &= mean_frame <= margin * dn_sat
+
+    apply_gain = cfg.get("processing", {}).get("apply_gain_map", False)
+    order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
+
+    def _fit_gain(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
+        if order <= 0:
+            c = float(np.mean(frame[mask]))
+            return np.full_like(frame, c)
+        y, x = np.indices(frame.shape)
+        xm, ym = x[mask].ravel(), y[mask].ravel()
+        z = frame[mask].ravel()
+        cols = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols.append((xm**i) * (ym**j))
+        A = np.vstack(cols).T
+        coef, *_ = np.linalg.lstsq(A, z, rcond=None)
+        cols_full = []
+        for i in range(order + 1):
+            for j in range(order + 1 - i):
+                cols_full.append((x**i) * (y**j))
+        A_full = np.stack(cols_full, axis=0)
+        fitted = np.tensordot(coef, A_full, axes=(0, 0))
+        return fitted
+
+    if apply_gain:
+        gain_map = _fit_gain(mean_frame, mask, order)
+        gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+        corrected = flat_stack / gain_map
+        mean_frame = np.mean(corrected, axis=0)
+
+    roi_mean = float(np.mean(mean_frame[mask]))
+    residual_map = mean_frame - roi_mean
+
+    stat_mode = cfg.get("processing", {}).get("stat_mode", "rms")
+    value = _reduce(residual_map[mask], stat_mode) / max(roi_mean, 1e-6) * 100.0
+    return value, residual_map
 
 
 def calculate_system_sensitivity(
