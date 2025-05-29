@@ -62,8 +62,9 @@ def load_image_stack(folder: Path | str) -> np.ndarray:
     files = _collect_frames(folder)
     if not files:
         raise FileNotFoundError(f"No TIFF files in {folder}")
-    stack = [tifffile.imread(str(f)) for f in files]
-    return np.stack(stack, axis=0)
+    file_list = [str(f) for f in files]
+    # use memory-mapped reading to reduce RAM usage
+    return tifffile.imread(file_list, mode="r", out="memmap")
 
 
 def load_first_frame(folder: Path | str) -> np.ndarray:
