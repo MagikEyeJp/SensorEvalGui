@@ -129,20 +129,20 @@ GUI上、および出力画像として出力
 * `dsnu_map.png`：DSNU（遮光画像の画素間オフセット）マップ
   * 表示：ROI領域の空間分布
   * カラーマップ：ヒートマップ（logスケール／標準化あり）
-* `dsnu_map_scaled.png`：DSNUマップ（0〜最大値スケール）
+* `dsnu_map_scaled.png`：DSNUマップ（0〜99パーセンタイルスケール）
 
 グループ Readnoise MAP
 * `readnoise_map.png`：読み出しノイズの空間分布（Dark画像差分）
   * 表示：ROI内での時間方向標準偏差（各画素ごと）
   * 合成方法：10枚からのstd、または差分法
   * カラーマップ：ヒートマップ
-* `readnoise_map_scaled.png`：読み出しノイズマップ（0〜最大値スケール）
+* `readnoise_map_scaled.png`：読み出しノイズマップ（0〜99パーセンタイルスケール）
 
 グループ  PRNU Residual
 * `prnu_residual_map.png`：ゲイン補正後の固定パターンノイズ（空間ばらつき）
   * 表示：Flat画像スタックの残差の空間分布（std or RMS）
   * 補正前後で比較可能にしてもよい
-* `prnu_residual_map_scaled.png`：PRNU残差マップ（0〜最大値スケール）
+* `prnu_residual_map_scaled.png`：PRNU残差マップ（0〜99パーセンタイルスケール）
 
 グループ  ROI area
 * `roi_area.png`：画像のROIの可視化
