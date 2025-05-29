@@ -34,6 +34,7 @@ __all__ = [
     "calculate_dn_at_snr",
     "calculate_snr_at_half",
     "calculate_dn_at_snr_one",
+    "fit_gain_map",
     "calculate_pseudo_prnu",
     "calculate_prnu_residual",
 ]
@@ -48,6 +49,47 @@ def _mask_from_rects(
     for l, t, w, h in rects:
         mask[t : t + h, l : l + w] = True
     return mask
+
+
+def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
+    """Return a plane-fit gain map for ``frame`` using ``mask`` pixels.
+
+    Parameters
+    ----------
+    frame:
+        2-D array of pixel values to fit.
+    mask:
+        Boolean mask selecting pixels to include in the fit.
+    order:
+        Polynomial order of the surface. ``0`` gives a constant plane.
+
+    Returns
+    -------
+    np.ndarray
+        Fitted gain map matching ``frame`` shape.
+    """
+    if order <= 0:
+        c = float(np.mean(frame[mask]))
+        return np.full_like(frame, c)
+
+    y, x = np.indices(frame.shape)
+    xm, ym = x[mask].ravel(), y[mask].ravel()
+    z = frame[mask].ravel()
+
+    cols = []
+    for i in range(order + 1):
+        for j in range(order + 1 - i):
+            cols.append((xm**i) * (ym**j))
+    A = np.vstack(cols).T
+    coef, *_ = np.linalg.lstsq(A, z, rcond=None)
+
+    cols_full = []
+    for i in range(order + 1):
+        for j in range(order + 1 - i):
+            cols_full.append((x**i) * (y**j))
+    A_full = np.stack(cols_full, axis=0)
+    fitted = np.tensordot(coef, A_full, axes=(0, 0))
+    return fitted
 
 
 # ───────────────────────────── public api
