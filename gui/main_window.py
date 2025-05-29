@@ -449,9 +449,17 @@ class MainWindow(QMainWindow):
         self.run_analysis()
 
     def run_analysis(self):
-        if self.project_dir is None or self.config is None:
+        if self.project_dir is None:
             QMessageBox.warning(self, "No Project", "Select a project folder first.")
             return
+        cfg_path = self.project_dir / "config.yaml"
+        if not cfg_path.is_file():
+            QMessageBox.critical(
+                self, "Error", "config.yaml not found in project folder"
+            )
+            return
+        # reload configuration fresh each run to avoid stale values
+        self.config = load_config(cfg_path)
         if self.worker is not None:
             return
         self.run_btn.setEnabled(False)
