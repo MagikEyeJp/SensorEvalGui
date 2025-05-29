@@ -213,7 +213,8 @@ processing:
   stat_mode: rms              # 'mean', 'rms', 'mad' から選択可能（分散合成・代表値算出に使用）
   snr_threshold_dB: 10       # SNR評価での可視限界（10dB など）
   min_sig_factor: 3           # σ_read の n倍以上を有効信号とみなす
-  apply_gain_map : false      # PRNUの算出時gain_map補正をするか
+  gain_map_mode : none        # self_fit | flat_fit | flat_frame | none
+                             # PRNUの算出時gain_map補正方法
   prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
   plane_fit_order: 2          # ROI内傾斜補正次数
 

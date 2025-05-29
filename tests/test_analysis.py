@@ -255,7 +255,7 @@ def test_extract_roi_table_temporal_std(tmp_path):
     assert pytest.approx(row["SNR (dB)"], abs=1e-6) == 20 * np.log10(2.25)
 
 
-def test_extract_roi_stats_gainmap(tmp_path):
+def test_extract_roi_stats_gainmap_self_fit(tmp_path):
     sys.modules["roifile"] = types.SimpleNamespace(roiread=_roiread)
     importlib.reload(roi)
     importlib.reload(analysis)
@@ -288,6 +288,7 @@ def test_extract_roi_stats_gainmap(tmp_path):
             "min_sig_factor": 0,
             "exclude_abnormal_snr": False,
             "plane_fit_order": 1,
+            "gain_map_mode": "self_fit",
         },
     }
     cfg_file = project / "config.yaml"
@@ -303,6 +304,75 @@ def test_extract_roi_stats_gainmap(tmp_path):
     assert pytest.approx(res["std"], abs=1e-6) == pytest.approx(1.0 / 3.0, abs=1e-6)
 
 
+@pytest.mark.parametrize(
+    "mode, expected_mean, expected_std",
+    [
+        ("flat_fit", 11.25, 3.952847075210474),
+        ("flat_frame", 11.25, 3.952847075210474),
+    ],
+)
+def test_extract_roi_stats_gainmap_modes(tmp_path, mode, expected_mean, expected_std):
+    sys.modules["roifile"] = types.SimpleNamespace(roiread=_roiread)
+    importlib.reload(roi)
+    importlib.reload(analysis)
+
+    project = tmp_path
+    chart_stack = np.stack(
+        [
+            [[10, 10], [10, 10]],
+            [[20, 20], [20, 20]],
+        ],
+        axis=0,
+    ).astype(np.uint16)
+    chart_dir = project / "gain_0dB" / "chart_1x"
+    chart_dir.mkdir(parents=True)
+    for i, frame in enumerate(chart_stack):
+        tifffile.imwrite(chart_dir / f"frame{i}.tiff", frame)
+
+    flat_stack = np.stack(
+        [
+            [[1, 2], [1, 2]],
+            [[1, 2], [1, 2]],
+        ],
+        axis=0,
+    ).astype(np.uint16)
+    flat_dir = project / "gain_0dB" / "LensFlat"
+    flat_dir.mkdir(parents=True)
+    for i, frame in enumerate(flat_stack):
+        tifffile.imwrite(flat_dir / f"frame{i}.tiff", frame)
+
+    roi_file = project / "roi.roi"
+    roi_file.write_text("dummy")
+
+    cfg_data = {
+        "measurement": {
+            "gains": {0: {"folder": "gain_0dB"}},
+            "exposures": {1.0: {"folder": "chart_1x"}},
+            "chart_roi_file": str(roi_file),
+            "flat_roi_file": str(roi_file),
+            "flat_lens_folder": "LensFlat",
+        },
+        "processing": {
+            "stat_mode": "rms",
+            "min_sig_factor": 0,
+            "exclude_abnormal_snr": False,
+            "plane_fit_order": 1,
+            "gain_map_mode": mode,
+        },
+    }
+    cfg_file = project / "config.yaml"
+    with cfg_file.open("w") as fh:
+        import yaml
+
+        yaml.safe_dump(cfg_data, fh)
+
+    cfg = load_config(cfg_file)
+    stats = analysis.extract_roi_stats_gainmap(project, cfg)
+    res = stats[(0.0, 1.0)]
+    assert pytest.approx(res["mean"], abs=1e-6) == expected_mean
+    assert pytest.approx(res["std"], abs=1e-6) == expected_std
+
+
 def test_calculate_prnu_residual_simple():
     stack = np.array(
         [
@@ -311,7 +381,7 @@ def test_calculate_prnu_residual_simple():
         ],
         dtype=np.uint16,
     )
-    cfg = {"processing": {"apply_gain_map": False, "stat_mode": "rms"}}
+    cfg = {"processing": {"gain_map_mode": "none", "stat_mode": "rms"}}
     val, res = analysis.calculate_prnu_residual(stack, cfg)
     expected = np.array([[1, 2], [3, 4]], dtype=float) - 2.5
     assert res.shape == (2, 2)

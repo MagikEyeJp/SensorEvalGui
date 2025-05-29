@@ -53,6 +53,9 @@ def load_config(project_cfg_path: Path | str) -> Dict[str, Any]:
     if "exposures" in meas:
         meas["exposures"] = {str(k): v for k, v in meas["exposures"].items()}
     cfg["measurement"] = meas
+    proc = cfg.get("processing", {})
+    proc["gain_map_mode"] = str(proc.get("gain_map_mode", "none"))
+    cfg["processing"] = proc
     return cfg
 
 

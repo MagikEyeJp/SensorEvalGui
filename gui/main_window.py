@@ -135,8 +135,8 @@ def run_pipeline(
             snr_lin = signals / noises
             ratios = np.array([kv[0][1] for kv in tuples])
 
-            apply_gain = cfg.get("processing", {}).get("apply_gain_map", False)
-            if apply_gain:
+            gain_mode = cfg.get("processing", {}).get("gain_map_mode", "none")
+            if gain_mode != "none":
                 stats_corr = extract_roi_stats_gainmap(project, cfg)
                 tuples_c = sorted(stats_corr.items(), key=lambda kv: kv[1]["mean"])
                 signals_corr = np.array([kv[1]["mean"] for kv in tuples_c])
@@ -189,7 +189,7 @@ def run_pipeline(
                         out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack
                     )
                 prnu, prnu_map_tmp = calculate_prnu_residual(
-                    flat_stack, cfg, flat_rects
+                    flat_stack, cfg, flat_rects, project, gain_db
                 )
                 gain_mult = cfgutil.gain_ratio(gain_db)
                 sens = calculate_system_sensitivity(
