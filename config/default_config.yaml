@@ -54,6 +54,7 @@ plot:
   # exposures: [4.0,2.0,1.0,0.5,0.25,0.125,0.0625]  # Override order if needed
   color_by_exposure: false         # Optional UI key
   exposure_labels: [3840,1920,960,480,240,120,60]
+  prnu_squared: false              # Plot μ² vs σ² if true
 
 output:
   output_dir: output
