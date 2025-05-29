@@ -256,6 +256,8 @@ def extract_roi_stats_gainmap(
                 else:  # flat_frame
                     gain_map = mean_src
             gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+            gain_map_mean = np.mean(gain_map[mask_fit])
+            gain_map /= max(gain_map_mean, 1e-6)
             corrected = stack / gain_map
 
             rects = chart_rects if "chart" in efold.lower() else flat_rects
@@ -729,6 +731,8 @@ def calculate_pseudo_prnu(
         else:
             gain_map = _fit_gain(mean_src, mask, order)
         gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+        gain_map_mean = np.mean(gain_map[mask])
+        gain_map /= max(gain_map_mean, 1e-6)
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
         std_frame = np.std(corrected, axis=0)
@@ -816,6 +820,8 @@ def calculate_prnu_residual(
         else:
             gain_map = _fit_gain(mean_src, mask, order)
         gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+        gain_map_mean = np.mean(gain_map[mask])
+        gain_map /= max(gain_map_mean, 1e-6)
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
 
