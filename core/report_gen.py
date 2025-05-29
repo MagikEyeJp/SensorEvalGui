@@ -140,24 +140,33 @@ def report_html(
     ]
     html.append("<h1>Sensor Evaluation Summary</h1>")
     html.append(f"<table border='1' cellpadding='4'>{rows}</table>")
-    for key in [
-        "snr_signal",
-        "snr_exposure",
-        "prnu_fit",
-        "dsnu_map",
-        "dsnu_map_scaled",
-        "readnoise_map",
-        "readnoise_map_scaled",
-        "prnu_residual_map",
-        "prnu_residual_map_scaled",
-        "roi_area",
-    ]:
-        if key in graphs and graphs[key].exists():
-            title = key.replace("_", " ").title()
-            html.append(f"<h2>{title}</h2>")
+    groups = [
+        ("snr_signal",),
+        ("snr_exposure",),
+        ("prnu_fit",),
+        ("dsnu_map", "dsnu_map_scaled"),
+        ("readnoise_map", "readnoise_map_scaled"),
+        ("prnu_residual_map", "prnu_residual_map_scaled"),
+        ("roi_area",),
+    ]
+
+    for keys in groups:
+        valid = [k for k in keys if k in graphs and graphs[k].exists()]
+        if not valid:
+            continue
+        title = keys[0].replace("_", " ").title()
+        html.append(f"<h2>{title}</h2>")
+        if len(valid) == 1:
             html.append(
-                f"<img src='data:image/png;base64,{_b64(graphs[key])}' width='600'/>"
+                f"<img src='data:image/png;base64,{_b64(graphs[valid[0]])}' width='600'/>"
             )
+        else:
+            html.append("<table><tr>")
+            for k in valid:
+                html.append(
+                    f"<td><img src='data:image/png;base64,{_b64(graphs[k])}' width='300'/></td>"
+                )
+            html.append("</tr></table>")
     html.append("</body></html>")
     html = "\n".join(html)
     path.write_text(html, encoding="utf-8")

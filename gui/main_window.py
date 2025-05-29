@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Sequence
 import logging
 import threading
 
@@ -490,20 +490,23 @@ class MainWindow(QMainWindow):
 
         self.graph_tabs.clear()
 
-        graph_files = {
-            "SNR-Signal": "snr_signal.png",
-            "SNR-Exposure": "snr_exposure.png",
-            "PRNU Fit": "prnu_fit.png",
-            "DSNU Map": "dsnu_map.png",
-            "Readnoise Map": "readnoise_map.png",
-            "PRNU Residual": "prnu_residual_map.png",
-            "ROI Area": "roi_area.png",
+        graph_groups = {
+            "SNR-Signal": ["snr_signal.png"],
+            "SNR-Exposure": ["snr_exposure.png"],
+            "PRNU Fit": ["prnu_fit.png"],
+            "DSNU Map": ["dsnu_map.png", "dsnu_map_scaled.png"],
+            "Readnoise Map": ["readnoise_map.png", "readnoise_map_scaled.png"],
+            "PRNU Residual": [
+                "prnu_residual_map.png",
+                "prnu_residual_map_scaled.png",
+            ],
+            "ROI Area": ["roi_area.png"],
         }
 
-        for title, fname in graph_files.items():
-            path = out_dir / fname
-            if path.is_file():
-                widget = self._create_canvas(path)
+        for title, names in graph_groups.items():
+            paths = [out_dir / n for n in names if (out_dir / n).is_file()]
+            if paths:
+                widget = self._create_canvas(paths)
                 self.graph_tabs.addTab(widget, title)
 
         self.resize(640, self.height())
@@ -511,17 +514,22 @@ class MainWindow(QMainWindow):
         self.splitter.setSizes([int(h * 0.25), int(h * 0.75)])
         self._refresh_canvas_geometry()
 
-    def _create_canvas(self, png_path: Path) -> QWidget:
-        """Return QWidget with interactive matplotlib canvas for the PNG."""
-        img = plt.imread(str(png_path))
+    def _create_canvas(self, png_paths: Sequence[Path]) -> QWidget:
+        """Return QWidget with interactive matplotlib canvas for the PNGs."""
+        imgs = [plt.imread(str(p)) for p in png_paths]
+        n = len(imgs)
         fig = Figure(constrained_layout=True)
-        ax = fig.add_subplot(111)
-        ax.imshow(img)
-        ax.set_axis_off()
+        axes = fig.subplots(1, n)
+        if n == 1:
+            axes = [axes]
+        for ax, img in zip(axes, imgs):
+            ax.imshow(img)
+            ax.set_axis_off()
         canvas = FigureCanvas(fig)
         canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        h, w = img.shape[:2]
-        canvas.setMinimumSize(w, h)
+        height = max(img.shape[0] for img in imgs)
+        width = sum(img.shape[1] for img in imgs)
+        canvas.setMinimumSize(width, height)
         self.canvases.append(canvas)
         toolbar = NavigationToolbar2QT(canvas, None)
 
