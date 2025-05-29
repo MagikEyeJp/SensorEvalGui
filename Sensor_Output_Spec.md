@@ -214,7 +214,8 @@ processing:
   snr_threshold_dB: 10       # SNR評価での可視限界（10dB など）
   min_sig_factor: 3           # σ_read の n倍以上を有効信号とみなす
   gain_map_mode : none        # self_fit | flat_fit | flat_frame | none
-                             # ゲインマップは平均値で正規化して相対補正を行う
+                             # PRNUの算出時gain_map補正方法
+                             # ゲインマップは平均1に正規化して使用する
   prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
   plane_fit_order: 2          # ROI内傾斜補正次数
 

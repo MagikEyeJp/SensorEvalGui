@@ -300,15 +300,15 @@ def test_extract_roi_stats_gainmap_self_fit(tmp_path):
     cfg = load_config(cfg_file)
     stats = analysis.extract_roi_stats_gainmap(project, cfg)
     res = stats[(0.0, 1.0)]
-    assert pytest.approx(res["mean"], abs=1e-6) == 1.0
-    assert pytest.approx(res["std"], abs=1e-6) == pytest.approx(1.0 / 3.0, abs=1e-6)
+    assert pytest.approx(res["mean"], abs=1e-6) == 22.5
+    assert pytest.approx(res["std"], abs=1e-6) == pytest.approx(7.5, abs=1e-6)
 
 
 @pytest.mark.parametrize(
     "mode, expected_mean, expected_std",
     [
-        ("flat_fit", 11.25, 3.952847075210474),
-        ("flat_frame", 11.25, 3.952847075210474),
+        ("flat_fit", 16.875, 5.929271154968454),
+        ("flat_frame", 16.875, 5.929271154968454),
     ],
 )
 def test_extract_roi_stats_gainmap_modes(tmp_path, mode, expected_mean, expected_std):
