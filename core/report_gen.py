@@ -76,17 +76,33 @@ def save_summary_txt(
 
         if summary:
             metrics = sorted({m for g in summary.values() for m in g})
-            header = [f"{'Metric':20}"] + [f"{g:.0f} dB" for g in sorted(summary)]
-            lines.append("\t".join(header))
+
+            header = ["Metric"] + [f"{g:.0f} dB" for g in sorted(summary)]
+            rows: list[list[str]] = []
             for key in metrics:
-                row = [f"{key:20}"]
+                row = [key]
                 for gain in sorted(summary):
                     val = summary[gain].get(key, float("nan"))
                     if isinstance(val, (int, float)):
                         row.append(f"{val:.3f}")
                     else:
                         row.append(str(val))
-                lines.append("\t".join(row))
+                rows.append(row)
+
+            table = [header] + rows
+            col_widths = [
+                max(len(str(col[i])) for col in table) for i in range(len(header))
+            ]
+            col_widths[0] = max(20, col_widths[0])
+
+            def fmt(row: list[str]) -> str:
+                return "  ".join(
+                    text.ljust(col_widths[i]) for i, text in enumerate(row)
+                )
+
+            lines.append(fmt(header))
+            for row in rows:
+                lines.append(fmt(row))
             lines.append("")
         p.write_text("\n".join(lines), encoding="utf-8")
 
