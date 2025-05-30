@@ -215,23 +215,40 @@ illumination:
   exposure_ms: 960         # 95%時の露出時間
 
 processing:
-  mask_upper_margin: 0.85     # 飽和 DN_sat の 90 % 未満を回帰に使う
+  roi_zip_file: chart_roi.zip  # 既定ROI ZIPファイル
   stat_mode: rms              # 'mean', 'rms', 'mad' から選択可能（分散合成・代表値算出に使用）
   snr_threshold_dB: 10       # SNR評価での可視限界（10dB など）
   min_sig_factor: 3           # σ_read の n倍以上を有効信号とみなす
+  mask_upper_margin: 0.85     # 飽和 DN_sat の 90 % 未満を回帰に使う
   gain_map_mode : none        # self_fit | flat_fit | flat_frame | none  PRNUの算出時gain_map補正方法
-  prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
   plane_fit_order: 2          # ROI内傾斜補正次数
   read_noise_mode: 0          # 0:スタックstd, 1:差分std/√2
+  prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
+  exclude_abnormal_snr: true  # SNRが極端に低いROIを除外
 
 plot:
   exposures: [1.0, 0.0625]    # 図1に描画する露光倍率
+  color_by_exposure: false   # 露光倍率ごとに色分け
+  exposure_labels: [3840,1920,960,480,240,120,60]  # 露光時間(ms)ラベル
+  prnu_squared: false        # μ² vs σ² 表示
   dummy: 0.0
 
 output:
+  output_dir: output         # 出力ルートディレクトリ
   report_html: true           # レポートhtmlを自動的に書き出す
   report_csv: true            # レポートcsvを自動的に書き出す
+  report_summary: true        # サマリーテキストを生成
   debug_stacks: true          # (デバッグ用)stack_cache, dark_cache, flat_cacheの内容を画像ファイルとして保存する
+  report_order:
+    - Dynamic Range (dB)
+    - SNR @ 50% (dB)
+    - DN @ 10 dB
+    - DN @ 0 dB
+    - Read Noise (DN)
+    - DSNU (DN)
+    - DN_sat
+    - PRNU (%)
+    - System Sensitivity
 
 ```
 
