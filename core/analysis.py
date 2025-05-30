@@ -34,6 +34,7 @@ __all__ = [
     "calculate_dn_at_snr",
     "calculate_snr_at_half",
     "calculate_dn_at_snr_one",
+    "fit_gain_map_rbf",
     "fit_gain_map",
     "get_gain_map",
     "calculate_gain_map",
@@ -86,7 +87,39 @@ def _gain_fit_mask(stack: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
     return (mean_frame >= lo * dn_sat) & (mean_frame <= hi * dn_sat)
 
 
-def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
+def fit_gain_map_rbf(
+    frame: np.ndarray,
+    mask: np.ndarray,
+    smooth: float = 0.0,
+    function: str = "thin_plate",
+) -> np.ndarray:
+    """Return RBF-interpolated gain map for ``frame`` using ``mask`` pixels."""
+
+    try:
+        from scipy.interpolate import Rbf
+    except Exception as exc:  # pragma: no cover - runtime dependency missing
+        raise RuntimeError("scipy is required for RBF fitting") from exc
+
+    y, x = np.indices(frame.shape)
+    xm, ym = x[mask].ravel(), y[mask].ravel()
+    z = frame[mask].ravel()
+
+    rbf = Rbf(xm, ym, z, function=function, smooth=smooth)
+    fitted = rbf(x, y)
+
+    fitted = np.where(fitted == 0, 1e-6, fitted)
+    gain_max = np.max(fitted[mask])
+    fitted /= max(gain_max, 1e-6)
+    return fitted
+
+
+def fit_gain_map(
+    frame: np.ndarray,
+    mask: np.ndarray,
+    order: int,
+    *,
+    method: str = "poly",
+) -> np.ndarray:
     """Return a plane-fit gain map for ``frame`` using ``mask`` pixels.
 
     The returned map is normalized so that the brightest masked pixel is ``1``.
@@ -105,7 +138,15 @@ def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
     np.ndarray
         Fitted gain map matching ``frame`` shape.
     """
-    logging.debug("Fitting gain map: order=%d mask_pixels=%d", order, int(mask.sum()))
+    logging.debug(
+        "Fitting gain map: method=%s order=%d mask_pixels=%d",
+        method,
+        order,
+        int(mask.sum()),
+    )
+
+    if method == "rbf":
+        return fit_gain_map_rbf(frame, mask, smooth=float(order))
 
     if order <= 0:
         c = float(np.mean(frame[mask]))
@@ -184,9 +225,11 @@ def get_gain_map(
         return None
 
     order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
+    method = cfg.get("processing", {}).get("gain_fit_method", "poly")
     logging.debug(
-        "get_gain_map: mode=%s order=%d stack_provided=%s",
+        "get_gain_map: mode=%s method=%s order=%d stack_provided=%s",
         mode,
+        method,
         order,
         stack is not None,
     )
@@ -239,7 +282,7 @@ def get_gain_map(
             float(np.max(gain_map)),
         )
     else:
-        gain_map = fit_gain_map(mean_src, mask, order)
+        gain_map = fit_gain_map(mean_src, mask, order, method=method)
         logging.debug(
             "Fit gain map result: min=%.3g max=%.3g",
             float(np.min(gain_map)),

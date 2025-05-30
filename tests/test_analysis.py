@@ -404,3 +404,12 @@ def test_fit_gain_map_order1_exact():
     mask = np.ones_like(frame, dtype=bool)
     res = analysis.fit_gain_map(frame, mask, order=1)
     assert np.allclose(res, frame / 4.0)
+
+
+def test_fit_gain_map_rbf_basic():
+    pytest.importorskip("scipy")
+    frame = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=float)
+    mask = np.ones_like(frame, dtype=bool)
+    res = analysis.fit_gain_map(frame, mask, order=0, method="rbf")
+    assert res.shape == frame.shape
+    assert np.allclose(np.max(res), 1.0)
