@@ -150,6 +150,7 @@ GUI上、および出力画像として出力
   * 表示：Flat画像スタックの残差の空間分布（std or RMS）
   * 補正前後で比較可能にしてもよい
 * `prnu_residual_map_scaled.png`：PRNU残差マップ（0〜99パーセンタイルスケール）
+* `gain_map.png`：ゲインマップ（最大値で正規化）
 
 グループ  ROI area
 * `roi_area.png`：画像のROIの可視化

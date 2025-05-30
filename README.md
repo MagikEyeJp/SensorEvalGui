@@ -72,6 +72,7 @@ Run the GUI using `python main.py`
         •       🗺 readnoise_map_scaled.png: Read noise map (scaled to 99th percentile)
         •       🗺 prnu_residual_map.png: PRNU residual map (mean frame minus ROI average)
         •       🗺 prnu_residual_map_scaled.png: PRNU residual map (scaled to 99th percentile)
+        •       🗺 gain_map.png: Gain map (normalized to brightest pixel)
         •       📋 summary.txt: Key evaluation metrics
         •       📄 report.html: Embedded HTML report
         •       📌 Metrics include SNR @ 50%, DN @ SNR=1 (0 dB), and Black level (DN)
