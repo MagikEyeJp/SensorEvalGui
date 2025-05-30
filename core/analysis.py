@@ -36,6 +36,7 @@ __all__ = [
     "calculate_dn_at_snr_one",
     "fit_gain_map",
     "get_gain_map",
+    "calculate_gain_map",
     "calculate_pseudo_prnu",
     "calculate_prnu_residual",
 ]
@@ -60,9 +61,7 @@ def _load_stack_cached(folder: Path) -> np.ndarray:
 # ───────────────────────────── internal helpers
 
 
-def _mask_from_rects(
-    shape: Tuple[int, int], rects: List[Tuple[int, int, int, int]]
-) -> np.ndarray:
+def _mask_from_rects(shape: Tuple[int, int], rects: List[Tuple[int, int, int, int]]) -> np.ndarray:
     mask = np.zeros(shape, bool)
     for l, t, w, h in rects:
         mask[t : t + h, l : l + w] = True
@@ -185,9 +184,9 @@ def get_gain_map(
         )
     else:
         if stack is None:
-            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
-                "measurement"
-            ].get("flat_lens_folder", "LensFlat")
+            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg["measurement"].get(
+                "flat_lens_folder", "LensFlat"
+            )
             stack = load_image_stack(flat_folder)
             mean_src = np.mean(stack, axis=0)
             logging.debug(
@@ -266,9 +265,7 @@ def extract_roi_stats(
     chart_rects = load_rois(chart_roi_file)
     flat_rects = load_rois(flat_roi_file)
 
-    mid_idx = cfg.get("reference", {}).get(
-        "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
-    )
+    mid_idx = cfg.get("reference", {}).get("roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5))
 
     snr_thresh = cfg["processing"].get("snr_threshold_dB", 10.0)
     min_sig_factor = cfg["processing"].get("min_sig_factor", 3.0)
@@ -285,9 +282,7 @@ def extract_roi_stats(
             if not folder.is_dir():
                 logging.info("Skipping missing folder: %s", folder)
                 continue
-            logging.info(
-                "Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio
-            )
+            logging.info("Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio)
             if status:
                 status(f"Loading images for gain {gain_db:.1f} dB")
             stack = _load_stack_cached(folder)
@@ -301,9 +296,9 @@ def extract_roi_stats(
                 if mode != "self_fit":
                     flat_stack = flat_cache.get(gain_db)
                     if flat_stack is None:
-                        flat_folder = cfgutil.find_gain_folder(
-                            project_dir, gain_db, cfg
-                        ) / cfg["measurement"].get("flat_lens_folder", "LensFlat")
+                        flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg["measurement"].get(
+                            "flat_lens_folder", "LensFlat"
+                        )
                         if status:
                             status(f"Loading flat frames for gain {gain_db:.1f} dB")
                         flat_stack = _load_stack_cached(flat_folder)
@@ -378,9 +373,7 @@ def extract_roi_stats_gainmap(
     )
 
 
-def extract_roi_table(
-    project_dir: Path | str, cfg: Dict[str, Any]
-) -> List[Dict[str, Any]]:
+def extract_roi_table(project_dir: Path | str, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Return ROI statistics formatted for CSV output.
 
     Parameters
@@ -441,9 +434,7 @@ def extract_roi_table(
     return rows
 
 
-def collect_mid_roi_snr(
-    rows: List[Dict[str, Any]], mid_index: int
-) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
+def collect_mid_roi_snr(rows: List[Dict[str, Any]], mid_index: int) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
     """Return SNR curves for the grayscale ROI at ``mid_index``.
 
     Parameters
@@ -543,9 +534,7 @@ def collect_prnu_points(
     return res
 
 
-def calculate_snr_curve(
-    signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]
-) -> np.ndarray:
+def calculate_snr_curve(signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
     """Compute the signal-to-noise ratio for each pixel.
 
     Parameters
@@ -565,9 +554,7 @@ def calculate_snr_curve(
     return snr
 
 
-def calculate_dynamic_range(
-    snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, Any]
-) -> float:
+def calculate_dynamic_range(snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, Any]) -> float:
     """Estimate dynamic range from the SNR curve.
 
     Parameters
@@ -609,9 +596,7 @@ def _reduce(values: np.ndarray, mode: str) -> float:
     raise ValueError(mode)
 
 
-def calculate_dark_noise(
-    project_dir: Path | str, cfg: Dict[str, Any]
-) -> Tuple[float, float]:
+def calculate_dark_noise(project_dir: Path | str, cfg: Dict[str, Any]) -> Tuple[float, float]:
     """Calculate DSNU and read noise from a dark frame stack.
 
     Parameters
@@ -771,11 +756,7 @@ def calculate_pseudo_prnu(
         ``(pseudo_prnu_percent, residual_map)`` where the residual map matches the image shape.
     """
 
-    mask = (
-        _mask_from_rects(flat_stack.shape[1:], rects)
-        if rects
-        else np.ones(flat_stack.shape[1:], bool)
-    )
+    mask = _mask_from_rects(flat_stack.shape[1:], rects) if rects else np.ones(flat_stack.shape[1:], bool)
 
     mean_frame = np.mean(flat_stack, axis=0)
     margin = cfg.get("processing", {}).get("mask_upper_margin")
@@ -797,11 +778,7 @@ def calculate_pseudo_prnu(
         mask,
         project_dir=project_dir,
         gain_db=gain_db,
-        stack=(
-            flat_stack
-            if mode == "self_fit" or project_dir is None or gain_db is None
-            else None
-        ),
+        stack=(flat_stack if mode == "self_fit" or project_dir is None or gain_db is None else None),
     )
 
     if gain_map is not None:
@@ -812,10 +789,27 @@ def calculate_pseudo_prnu(
         std_frame = np.std(flat_stack, axis=0)
 
     stat_mode = cfg.get("processing", {}).get("stat_mode", "rms")
-    value = (
-        _reduce(std_frame[mask], stat_mode) / max(mean_frame[mask].mean(), 1e-6) * 100.0
-    )
+    value = _reduce(std_frame[mask], stat_mode) / max(mean_frame[mask].mean(), 1e-6) * 100.0
     return value, std_frame
+
+
+def calculate_gain_map(
+    flat_stack: np.ndarray,
+    cfg: Dict[str, Any],
+    rects: list[tuple[int, int, int, int]] | None = None,
+    project_dir: Path | str | None = None,
+    gain_db: float | None = None,
+) -> np.ndarray | None:
+    """Return gain map using flat-field stack and configuration."""
+
+    mask = _mask_from_rects(flat_stack.shape[1:], rects) if rects else np.ones(flat_stack.shape[1:], bool)
+    return get_gain_map(
+        cfg,
+        mask,
+        project_dir=project_dir,
+        gain_db=gain_db,
+        stack=flat_stack,
+    )
 
 
 def calculate_prnu_residual(
@@ -842,11 +836,7 @@ def calculate_prnu_residual(
         ``(prnu_percent, residual_map)`` where the residual map matches the image size.
     """
 
-    mask = (
-        _mask_from_rects(flat_stack.shape[1:], rects)
-        if rects
-        else np.ones(flat_stack.shape[1:], bool)
-    )
+    mask = _mask_from_rects(flat_stack.shape[1:], rects) if rects else np.ones(flat_stack.shape[1:], bool)
 
     mean_frame = np.mean(flat_stack, axis=0)
     margin = cfg.get("processing", {}).get("mask_upper_margin")
@@ -861,11 +851,7 @@ def calculate_prnu_residual(
         mask,
         project_dir=project_dir,
         gain_db=gain_db,
-        stack=(
-            flat_stack
-            if mode == "self_fit" or project_dir is None or gain_db is None
-            else None
-        ),
+        stack=(flat_stack if mode == "self_fit" or project_dir is None or gain_db is None else None),
     )
 
     if gain_map is not None:
@@ -919,11 +905,7 @@ def calculate_system_sensitivity(
         Sensitivity in DN / (µW·cm⁻²·s). Returns ``0.0`` if the denominator is zero.
     """
 
-    mask = (
-        _mask_from_rects(flat_stack.shape[1:], rects)
-        if rects
-        else np.ones(flat_stack.shape[1:], bool)
-    )
+    mask = _mask_from_rects(flat_stack.shape[1:], rects) if rects else np.ones(flat_stack.shape[1:], bool)
 
     illum = cfg.get("illumination", {})
     power = float(illum.get("power_uW_cm2", 1.0))
@@ -936,9 +918,7 @@ def calculate_system_sensitivity(
     return mean_dn / denom
 
 
-def calculate_dn_at_snr(
-    signal: np.ndarray, snr_lin: np.ndarray, threshold_db: float
-) -> float:
+def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: float) -> float:
     """Interpolate the DN value where the SNR reaches ``threshold_db``.
 
     Parameters
@@ -969,9 +949,7 @@ def calculate_dn_at_snr(
     return float(x0 + r * (x1 - x0))
 
 
-def calculate_snr_at_half(
-    signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float
-) -> float:
+def calculate_snr_at_half(signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float) -> float:
     """Return the SNR in dB at half of ``dn_sat``.
 
     Parameters
