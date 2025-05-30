@@ -123,7 +123,7 @@ def run_pipeline(
                 progress(0)
 
             # 1. ROI-based statistics
-            stats = extract_roi_stats(project, cfg)
+            stats = extract_roi_stats(project, cfg, status=status)
             if not stats:
                 raise RuntimeError("No valid stacks found for analysis")
 
@@ -138,7 +138,7 @@ def run_pipeline(
 
             gain_mode = cfg.get("processing", {}).get("gain_map_mode", "none")
             if gain_mode != "none":
-                stats_corr = extract_roi_stats_gainmap(project, cfg)
+                stats_corr = extract_roi_stats_gainmap(project, cfg, status=status)
                 tuples_c = sorted(stats_corr.items(), key=lambda kv: kv[1]["mean"])
                 signals_corr = np.array([kv[1]["mean"] for kv in tuples_c])
                 noises_corr = np.array([kv[1]["std"] for kv in tuples_c])
@@ -172,11 +172,13 @@ def run_pipeline(
                     status(f"Processing gain {gain_db:.1f} dB")
                 logging.info("Processing gain %.1f dB", gain_db)
                 dsnu, rn, dsnu_map_tmp, rn_map_tmp = calculate_dark_noise_gain(
-                    project, gain_db, cfg
+                    project, gain_db, cfg, status=status
                 )
                 flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg[
                     "measurement"
                 ].get("flat_lens_folder", "flat")
+                if status:
+                    status(f"Loading flat frames for gain {gain_db:.1f} dB")
                 flat_stack = load_image_stack(flat_folder)
                 if debug_stacks and first:
                     dark_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg[
