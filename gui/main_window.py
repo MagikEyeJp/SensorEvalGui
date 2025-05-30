@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QGridLayout,
 )
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QFontDatabase
 from PySide6.QtCore import QThread, Signal, Qt, QTimer
 
 from matplotlib.backends.backend_qtagg import (
@@ -445,6 +445,7 @@ class MainWindow(QMainWindow):
         self.summary_view = QTextEdit()
         self.summary_view.setReadOnly(True)
         self.summary_view.setLineWrapMode(QTextEdit.NoWrap)
+        self.summary_view.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
 
         self.graph_tabs = QTabWidget()
 
