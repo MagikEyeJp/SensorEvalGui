@@ -69,6 +69,7 @@ output:
     - DN @ 10 dB
     - DN @ 0 dB
     - Read Noise (DN)
+    - Black level (DN)
     - DSNU (DN)
     - DN_sat
     - PRNU (%)

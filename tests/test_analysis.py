@@ -62,12 +62,15 @@ def test_calculate_dark_noise_gain(tmp_path):
 
     cfg = load_config(cfg_file)
 
-    dsnu, rn, dsnu_map, rn_map = analysis.calculate_dark_noise_gain(project, 0, cfg)
+    dsnu, rn, dsnu_map, rn_map, black = analysis.calculate_dark_noise_gain(
+        project, 0, cfg
+    )
 
     assert pytest.approx(dsnu, abs=1e-6) == 0.0
     assert pytest.approx(rn, abs=1e-6) == 0.5
     assert dsnu_map.shape == (2, 2)
     assert rn_map.shape == (2, 2)
+    assert pytest.approx(black, abs=1e-6) == 0.5
 
 
 def test_calculate_system_sensitivity_ratio():

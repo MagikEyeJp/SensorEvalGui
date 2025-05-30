@@ -163,6 +163,7 @@ def run_pipeline(
             rn_list = []
             prnu_list = []
             sens_list = []
+            black_list = []
             per_gain: Dict[float, Dict[str, float]] = {}
             gains_list = [g for g, _ in cfgutil.gain_entries(cfg)]
             step = 60 / len(gains_list) if gains_list else 60
@@ -171,8 +172,8 @@ def run_pipeline(
                 if status:
                     status(f"Processing gain {gain_db:.1f} dB")
                 logging.info("Processing gain %.1f dB", gain_db)
-                dsnu, rn, dsnu_map_tmp, rn_map_tmp = calculate_dark_noise_gain(
-                    project, gain_db, cfg, status=status
+                dsnu, rn, dsnu_map_tmp, rn_map_tmp, black_level = (
+                    calculate_dark_noise_gain(project, gain_db, cfg, status=status)
                 )
                 flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg[
                     "measurement"
@@ -232,6 +233,7 @@ def run_pipeline(
                     "Dynamic Range (dB)": dyn_range_g,
                     "DSNU (DN)": dsnu,
                     "Read Noise (DN)": rn,
+                    "Black level (DN)": black_level,
                     "DN_sat": dn_sat,
                     "Pseudo PRNU (%)": prnu,
                     "System Sensitivity": sens,
@@ -244,6 +246,7 @@ def run_pipeline(
                 rn_list.append(rn)
                 prnu_list.append(prnu)
                 sens_list.append(sens)
+                black_list.append(black_level)
                 log_memory_usage(f"after gain {gain_db}: ")
                 if progress:
                     progress(int(10 + step * (idx + 1)))
@@ -253,6 +256,7 @@ def run_pipeline(
             dyn_range = calculate_dynamic_range_dn(dn_sat, read_noise)
             prnu = float(np.mean(prnu_list)) if prnu_list else float("nan")
             system_sens = float(np.mean(sens_list)) if sens_list else float("nan")
+            black_level = float(np.mean(black_list)) if black_list else 0.0
             dn_at_10 = calculate_dn_at_snr(
                 signals, snr_lin, cfg["processing"].get("snr_threshold_dB", 10.0)
             )
@@ -271,6 +275,7 @@ def run_pipeline(
                 "Dynamic Range (dB)": dyn_range,
                 "DSNU (DN)": dsnu,
                 "Read Noise (DN)": read_noise,
+                "Black level (DN)": black_level,
                 "DN_sat": dn_sat,
                 "Pseudo PRNU (%)": prnu,
                 "System Sensitivity": system_sens,

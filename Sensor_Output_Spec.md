@@ -56,6 +56,7 @@ Gainごとに下記項目を出力
     ※ 平均フレームから ROI 平均を引いた残差の空間ばらつきを DSNU と同様の方法で統計化する。ただし PRNU は出力を ROI 平均信号値で正規化する（残差/μ × 100 \[%]）。
 * **DSNU (DN)**：遮光画像10枚を平均 → 各画素値の空間方向標準偏差（ROI内）を計算し、config.processing.stat\_mode に従って代表値を算出。
 * **Read Noise (DN)**：遮光画像10枚の時間方向標準偏差（各画素の時系列におけるstd）を計算し、空間方向にまとめる際に config.processing.stat\_mode に従って代表値（rms/mean/mad）を算出。
+* **Black level (DN)**：ダーク画像スタックから ROI 平均値を求めたもの。ダーク補正に使用するスカラ値。
 
   * 使用モード：config.processing.read\_noise\_mode
     * 0：スタック全体の標準偏差から計算（デフォルト）
@@ -245,6 +246,7 @@ output:
     - DN @ 10 dB
     - DN @ 0 dB
     - Read Noise (DN)
+    - Black level (DN)
     - DSNU (DN)
     - DN_sat
     - PRNU (%)
