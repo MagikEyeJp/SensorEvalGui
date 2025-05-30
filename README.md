@@ -74,7 +74,7 @@ Run the GUI using `python main.py`
         •       🗺 prnu_residual_map_scaled.png: PRNU residual map (scaled to 99th percentile)
         •       📋 summary.txt: Key evaluation metrics
         •       📄 report.html: Embedded HTML report
-        •       📌 Metrics include SNR @ 50% and DN @ SNR=1 (0 dB)
+        •       📌 Metrics include SNR @ 50%, DN @ SNR=1 (0 dB), and Black level (DN)
         •       📑 roi_stats.csv: Per-condition stats
 
 For a comprehensive description of each output file, refer to

@@ -658,7 +658,7 @@ def calculate_dark_noise_gain(
     gain_db: float,
     cfg: Dict[str, Any],
     status: Optional[Callable[[str], None]] = None,
-) -> Tuple[float, float, np.ndarray, np.ndarray]:
+) -> Tuple[float, float, np.ndarray, np.ndarray, float]:
     """Calculate dark noise metrics for a specific gain setting.
 
     Parameters
@@ -672,8 +672,8 @@ def calculate_dark_noise_gain(
 
     Returns
     -------
-    Tuple[float, float, np.ndarray, np.ndarray]
-        ``(dsnu, read_noise, dsnu_map, read_noise_map)`` where maps match the image size.
+    Tuple[float, float, np.ndarray, np.ndarray, float]
+        ``(dsnu, read_noise, dsnu_map, read_noise_map, black_level)`` where maps match the image size.
     """
     gain_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg)
     dark_folder = gain_folder / cfg["measurement"].get("dark_folder", "dark")
@@ -687,7 +687,8 @@ def calculate_dark_noise_gain(
 
     stat_mode = cfg["processing"].get("stat_mode", "rms")
     mean_frame = np.mean(stack, axis=0)
-    dsnu_map = mean_frame - np.mean(mean_frame[mask])
+    black_level = float(np.mean(mean_frame[mask]))
+    dsnu_map = mean_frame - black_level
     dsnu = _reduce(dsnu_map[mask], stat_mode)
     mode = int(cfg.get("processing", {}).get("read_noise_mode", 0))
     if mode == 1:
@@ -696,7 +697,7 @@ def calculate_dark_noise_gain(
     else:
         read_noise_map = np.std(stack, axis=0)
     read_noise = _reduce(read_noise_map[mask], stat_mode)
-    return dsnu, read_noise, dsnu_map, read_noise_map
+    return dsnu, read_noise, dsnu_map, read_noise_map, black_level
 
 
 def calculate_dn_sat(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
