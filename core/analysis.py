@@ -61,11 +61,29 @@ def _load_stack_cached(folder: Path) -> np.ndarray:
 # ───────────────────────────── internal helpers
 
 
-def _mask_from_rects(shape: Tuple[int, int], rects: List[Tuple[int, int, int, int]]) -> np.ndarray:
+def _mask_from_rects(
+    shape: Tuple[int, int], rects: List[Tuple[int, int, int, int]]
+) -> np.ndarray:
     mask = np.zeros(shape, bool)
     for l, t, w, h in rects:
         mask[t : t + h, l : l + w] = True
     return mask
+
+
+def _gain_fit_mask(stack: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
+    """Return mask for gain-map fitting using ``stack`` and config margins."""
+
+    proc = cfg.get("processing", {})
+    lower = proc.get("mask_lower_margin")
+    upper = proc.get("mask_upper_margin")
+    if lower is None and upper is None:
+        return np.ones(stack.shape[1:], bool)
+
+    mean_frame = np.mean(stack, axis=0)
+    dn_sat = calculate_dn_sat(stack, cfg)
+    lo = 0.0 if lower is None else float(lower)
+    hi = float("inf") if upper is None else float(upper)
+    return (mean_frame >= lo * dn_sat) & (mean_frame <= hi * dn_sat)
 
 
 def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
@@ -131,7 +149,7 @@ def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
 
 def get_gain_map(
     cfg: Dict[str, Any],
-    mask: np.ndarray,
+    mask: np.ndarray | None,
     project_dir: Path | str | None = None,
     gain_db: float | None = None,
     stack: np.ndarray | None = None,
@@ -143,7 +161,8 @@ def get_gain_map(
     cfg:
         Parsed configuration dictionary.
     mask:
-        Boolean mask for plane fitting.
+        Boolean mask for plane fitting. If ``None``, it is generated from
+        ``stack`` using ``mask_lower_margin`` and ``mask_upper_margin``.
     project_dir:
         Project directory to load reference flats for ``flat_`` modes.
     gain_db:
@@ -184,9 +203,9 @@ def get_gain_map(
         )
     else:
         if stack is None:
-            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg["measurement"].get(
-                "flat_lens_folder", "LensFlat"
-            )
+            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
+                "measurement"
+            ].get("flat_lens_folder", "LensFlat")
             stack = load_image_stack(flat_folder)
             mean_src = np.mean(stack, axis=0)
             logging.debug(
@@ -204,6 +223,9 @@ def get_gain_map(
                 float(np.min(mean_src)),
                 float(np.max(mean_src)),
             )
+
+    if mask is None:
+        mask = _gain_fit_mask(stack, cfg)
 
     if mode == "flat_frame":
         gain_map = mean_src
@@ -265,7 +287,9 @@ def extract_roi_stats(
     chart_rects = load_rois(chart_roi_file)
     flat_rects = load_rois(flat_roi_file)
 
-    mid_idx = cfg.get("reference", {}).get("roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5))
+    mid_idx = cfg.get("reference", {}).get(
+        "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
+    )
 
     snr_thresh = cfg["processing"].get("snr_threshold_dB", 10.0)
     min_sig_factor = cfg["processing"].get("min_sig_factor", 3.0)
@@ -282,7 +306,9 @@ def extract_roi_stats(
             if not folder.is_dir():
                 logging.info("Skipping missing folder: %s", folder)
                 continue
-            logging.info("Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio)
+            logging.info(
+                "Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio
+            )
             if status:
                 status(f"Loading images for gain {gain_db:.1f} dB")
             stack = _load_stack_cached(folder)
@@ -291,24 +317,24 @@ def extract_roi_stats(
 
             corrected = stack
             if apply_gain:
-                mask_fit = _mask_from_rects(stack.shape[1:], flat_rects)
                 flat_stack = None
                 if mode != "self_fit":
                     flat_stack = flat_cache.get(gain_db)
                     if flat_stack is None:
-                        flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg["measurement"].get(
-                            "flat_lens_folder", "LensFlat"
-                        )
+                        flat_folder = cfgutil.find_gain_folder(
+                            project_dir, gain_db, cfg
+                        ) / cfg["measurement"].get("flat_lens_folder", "LensFlat")
                         if status:
                             status(f"Loading flat frames for gain {gain_db:.1f} dB")
                         flat_stack = _load_stack_cached(flat_folder)
                         flat_cache[gain_db] = flat_stack
+                stack_fit = stack if mode == "self_fit" else flat_stack
                 gain_map = get_gain_map(
                     cfg,
-                    mask_fit,
+                    None,
                     project_dir=project_dir,
                     gain_db=gain_db,
-                    stack=stack if mode == "self_fit" else flat_stack,
+                    stack=stack_fit,
                 )
                 corrected = stack if gain_map is None else stack / gain_map
 
@@ -373,7 +399,9 @@ def extract_roi_stats_gainmap(
     )
 
 
-def extract_roi_table(project_dir: Path | str, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+def extract_roi_table(
+    project_dir: Path | str, cfg: Dict[str, Any]
+) -> List[Dict[str, Any]]:
     """Return ROI statistics formatted for CSV output.
 
     Parameters
@@ -434,7 +462,9 @@ def extract_roi_table(project_dir: Path | str, cfg: Dict[str, Any]) -> List[Dict
     return rows
 
 
-def collect_mid_roi_snr(rows: List[Dict[str, Any]], mid_index: int) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
+def collect_mid_roi_snr(
+    rows: List[Dict[str, Any]], mid_index: int
+) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
     """Return SNR curves for the grayscale ROI at ``mid_index``.
 
     Parameters
@@ -534,7 +564,9 @@ def collect_prnu_points(
     return res
 
 
-def calculate_snr_curve(signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
+def calculate_snr_curve(
+    signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]
+) -> np.ndarray:
     """Compute the signal-to-noise ratio for each pixel.
 
     Parameters
@@ -554,7 +586,9 @@ def calculate_snr_curve(signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, An
     return snr
 
 
-def calculate_dynamic_range(snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, Any]) -> float:
+def calculate_dynamic_range(
+    snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, Any]
+) -> float:
     """Estimate dynamic range from the SNR curve.
 
     Parameters
@@ -596,7 +630,9 @@ def _reduce(values: np.ndarray, mode: str) -> float:
     raise ValueError(mode)
 
 
-def calculate_dark_noise(project_dir: Path | str, cfg: Dict[str, Any]) -> Tuple[float, float]:
+def calculate_dark_noise(
+    project_dir: Path | str, cfg: Dict[str, Any]
+) -> Tuple[float, float]:
     """Calculate DSNU and read noise from a dark frame stack.
 
     Parameters
@@ -756,7 +792,11 @@ def calculate_pseudo_prnu(
         ``(pseudo_prnu_percent, residual_map)`` where the residual map matches the image shape.
     """
 
-    mask = _mask_from_rects(flat_stack.shape[1:], rects) if rects else np.ones(flat_stack.shape[1:], bool)
+    mask = (
+        _mask_from_rects(flat_stack.shape[1:], rects)
+        if rects
+        else np.ones(flat_stack.shape[1:], bool)
+    )
 
     mean_frame = np.mean(flat_stack, axis=0)
     margin = cfg.get("processing", {}).get("mask_upper_margin")
@@ -775,10 +815,14 @@ def calculate_pseudo_prnu(
 
     gain_map = get_gain_map(
         cfg,
-        mask,
+        None,
         project_dir=project_dir,
         gain_db=gain_db,
-        stack=(flat_stack if mode == "self_fit" or project_dir is None or gain_db is None else None),
+        stack=(
+            flat_stack
+            if mode == "self_fit" or project_dir is None or gain_db is None
+            else None
+        ),
     )
 
     if gain_map is not None:
@@ -789,7 +833,9 @@ def calculate_pseudo_prnu(
         std_frame = np.std(flat_stack, axis=0)
 
     stat_mode = cfg.get("processing", {}).get("stat_mode", "rms")
-    value = _reduce(std_frame[mask], stat_mode) / max(mean_frame[mask].mean(), 1e-6) * 100.0
+    value = (
+        _reduce(std_frame[mask], stat_mode) / max(mean_frame[mask].mean(), 1e-6) * 100.0
+    )
     return value, std_frame
 
 
@@ -802,10 +848,10 @@ def calculate_gain_map(
 ) -> np.ndarray | None:
     """Return gain map using flat-field stack and configuration."""
 
-    mask = _mask_from_rects(flat_stack.shape[1:], rects) if rects else np.ones(flat_stack.shape[1:], bool)
+    _ = rects  # ROI unused for gain map fitting
     return get_gain_map(
         cfg,
-        mask,
+        None,
         project_dir=project_dir,
         gain_db=gain_db,
         stack=flat_stack,
@@ -836,7 +882,11 @@ def calculate_prnu_residual(
         ``(prnu_percent, residual_map)`` where the residual map matches the image size.
     """
 
-    mask = _mask_from_rects(flat_stack.shape[1:], rects) if rects else np.ones(flat_stack.shape[1:], bool)
+    mask = (
+        _mask_from_rects(flat_stack.shape[1:], rects)
+        if rects
+        else np.ones(flat_stack.shape[1:], bool)
+    )
 
     mean_frame = np.mean(flat_stack, axis=0)
     margin = cfg.get("processing", {}).get("mask_upper_margin")
@@ -848,10 +898,14 @@ def calculate_prnu_residual(
 
     gain_map = get_gain_map(
         cfg,
-        mask,
+        None,
         project_dir=project_dir,
         gain_db=gain_db,
-        stack=(flat_stack if mode == "self_fit" or project_dir is None or gain_db is None else None),
+        stack=(
+            flat_stack
+            if mode == "self_fit" or project_dir is None or gain_db is None
+            else None
+        ),
     )
 
     if gain_map is not None:
@@ -905,7 +959,11 @@ def calculate_system_sensitivity(
         Sensitivity in DN / (µW·cm⁻²·s). Returns ``0.0`` if the denominator is zero.
     """
 
-    mask = _mask_from_rects(flat_stack.shape[1:], rects) if rects else np.ones(flat_stack.shape[1:], bool)
+    mask = (
+        _mask_from_rects(flat_stack.shape[1:], rects)
+        if rects
+        else np.ones(flat_stack.shape[1:], bool)
+    )
 
     illum = cfg.get("illumination", {})
     power = float(illum.get("power_uW_cm2", 1.0))
@@ -918,7 +976,9 @@ def calculate_system_sensitivity(
     return mean_dn / denom
 
 
-def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: float) -> float:
+def calculate_dn_at_snr(
+    signal: np.ndarray, snr_lin: np.ndarray, threshold_db: float
+) -> float:
     """Interpolate the DN value where the SNR reaches ``threshold_db``.
 
     Parameters
@@ -949,7 +1009,9 @@ def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: f
     return float(x0 + r * (x1 - x0))
 
 
-def calculate_snr_at_half(signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float) -> float:
+def calculate_snr_at_half(
+    signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float
+) -> float:
     """Return the SNR in dB at half of ``dn_sat``.
 
     Parameters
