@@ -126,20 +126,26 @@ def report_html(
         ],
     )
 
-    rows = "".join(
-        (
-            f"<tr><td>{k}</td><td>{summary.get(k, '—'):.3f}</td></tr>"
-            if isinstance(summary.get(k), (int, float))
-            else f"<tr><td>{k}</td><td>{summary.get(k, '—')}</td></tr>"
-        )
-        for k in order
-    )
+    summary_file = path.parent / "summary.txt"
+    if summary_file.is_file():
+        summary_text = summary_file.read_text(encoding="utf-8")
+    else:
+        lines = _meta_lines(cfg)
+        for k in order:
+            val = summary.get(k, "—")
+            if isinstance(val, (int, float)):
+                lines.append(f"{k}: {val:.3f}")
+            else:
+                lines.append(f"{k}: {val}")
+        summary_text = "\n".join(lines)
 
     html = [
         "<html><head><meta charset='utf-8'><title>Sensor Evaluation Report</title></head><body>"
     ]
     html.append("<h1>Sensor Evaluation Summary</h1>")
-    html.append(f"<table border='1' cellpadding='4'>{rows}</table>")
+    html.append("<pre>")
+    html.append(summary_text)
+    html.append("</pre>")
     groups = [
         ("snr_signal",),
         ("snr_exposure",),

@@ -3,7 +3,7 @@ import pytest
 yaml = pytest.importorskip("yaml")
 
 from utils.config import load_config
-from core.report_gen import save_summary_txt
+from core.report_gen import save_summary_txt, report_html
 
 
 def test_save_summary_txt_full_scale(tmp_path):
@@ -23,3 +23,20 @@ def test_save_summary_txt_full_scale(tmp_path):
     text = out_file.read_text(encoding="utf-8")
     assert "ADC Full Scale (DN):" in text
     assert str(((1 << 10) - 1) * (1 << 6)) in text
+
+
+def test_report_html_summary_text(tmp_path):
+    cfg_data = {"output": {"report_html": True}}
+    cfg_file = tmp_path / "config.yaml"
+    with cfg_file.open("w", encoding="utf-8") as fh:
+        yaml.safe_dump(cfg_data, fh)
+    cfg = load_config(cfg_file)
+
+    summary_path = tmp_path / "summary.txt"
+    summary_text = "Line1\nLine2"
+    summary_path.write_text(summary_text, encoding="utf-8")
+
+    html_file = tmp_path / "report.html"
+    report_html({}, {}, cfg, html_file)
+    html = html_file.read_text(encoding="utf-8")
+    assert "Line1" in html and "Line2" in html
