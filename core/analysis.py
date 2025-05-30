@@ -71,6 +71,8 @@ def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
     np.ndarray
         Fitted gain map matching ``frame`` shape.
     """
+    logging.debug("Fitting gain map: order=%d mask_pixels=%d", order, int(mask.sum()))
+
     if order <= 0:
         c = float(np.mean(frame[mask]))
         fitted = np.full_like(frame, c)
@@ -93,9 +95,21 @@ def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
         A_full = np.stack(cols_full, axis=0)
         fitted = np.tensordot(coef, A_full, axes=(0, 0))
 
+    logging.debug(
+        "Gain map pre-normalization: min=%.3g max=%.3g",
+        fitted[mask].min(),
+        fitted[mask].max(),
+    )
+
     fitted = np.where(fitted == 0, 1e-6, fitted)
     gain_max = np.max(fitted[mask])
     fitted /= max(gain_max, 1e-6)
+    logging.debug(
+        "Gain map normalized: gain_max=%.3g min=%.3g max=%.3g",
+        gain_max,
+        fitted.min(),
+        fitted.max(),
+    )
     return fitted
 
 
@@ -131,30 +145,75 @@ def get_gain_map(
 
     mode = cfg.get("processing", {}).get("gain_map_mode", "none")
     if mode == "none":
+        logging.debug("Gain map mode is 'none'")
         return None
 
     order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
+    logging.debug(
+        "get_gain_map: mode=%s order=%d stack_provided=%s",
+        mode,
+        order,
+        stack is not None,
+    )
 
     if mode == "self_fit" or project_dir is None or gain_db is None:
         if stack is None:
             raise ValueError("stack is required for self_fit gain map")
         mean_src = np.mean(stack, axis=0)
+        logging.debug(
+            "Using provided stack for gain map; mean=%.3g min=%.3g max=%.3g",
+            float(np.mean(mean_src)),
+            float(np.min(mean_src)),
+            float(np.max(mean_src)),
+        )
     else:
         if stack is None:
             flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
                 "measurement"
             ].get("flat_lens_folder", "LensFlat")
             stack = load_image_stack(flat_folder)
-        mean_src = np.mean(stack, axis=0)
+            mean_src = np.mean(stack, axis=0)
+            logging.debug(
+                "Loaded reference flat stack from %s; mean=%.3g min=%.3g max=%.3g",
+                flat_folder,
+                float(np.mean(mean_src)),
+                float(np.min(mean_src)),
+                float(np.max(mean_src)),
+            )
+        else:
+            mean_src = np.mean(stack, axis=0)
+            logging.debug(
+                "Using provided flat stack; mean=%.3g min=%.3g max=%.3g",
+                float(np.mean(mean_src)),
+                float(np.min(mean_src)),
+                float(np.max(mean_src)),
+            )
 
     if mode == "flat_frame":
         gain_map = mean_src
         gain_map = np.where(gain_map == 0, 1e-6, gain_map)
         gain_max = np.max(gain_map[mask])
         gain_map /= max(gain_max, 1e-6)
+        logging.debug(
+            "Flat frame mode: gain_max=%.3g min=%.3g max=%.3g",
+            gain_max,
+            float(np.min(gain_map)),
+            float(np.max(gain_map)),
+        )
     else:
         gain_map = fit_gain_map(mean_src, mask, order)
+        logging.debug(
+            "Fit gain map result: min=%.3g max=%.3g",
+            float(np.min(gain_map)),
+            float(np.max(gain_map)),
+        )
 
+    logging.debug(
+        "Gain map returned: mean=%.3g min=%.3g max=%.3g",
+        float(np.mean(gain_map)),
+        float(np.min(gain_map)),
+        float(np.max(gain_map)),
+    )
     return gain_map
 
 
@@ -752,6 +811,13 @@ def calculate_pseudo_prnu(
         dn_sat = calculate_dn_sat(flat_stack, cfg)
         mask &= mean_frame <= margin * dn_sat
 
+    logging.debug(
+        "PRNU residual: initial mean=%.3g min=%.3g max=%.3g",
+        float(np.mean(mean_frame)),
+        float(np.min(mean_frame)),
+        float(np.max(mean_frame)),
+    )
+
     mode = cfg.get("processing", {}).get("gain_map_mode", "none")
 
     gain_map = get_gain_map(
@@ -833,9 +899,22 @@ def calculate_prnu_residual(
     if gain_map is not None:
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
+        logging.debug(
+            "Corrected frame: mean=%.3g min=%.3g max=%.3g",
+            float(np.mean(mean_frame)),
+            float(np.min(mean_frame)),
+            float(np.max(mean_frame)),
+        )
 
     roi_mean = float(np.mean(mean_frame[mask]))
     residual_map = mean_frame - roi_mean
+
+    logging.debug(
+        "Residual map: roi_mean=%.3g min=%.3g max=%.3g",
+        roi_mean,
+        float(np.min(residual_map)),
+        float(np.max(residual_map)),
+    )
 
     stat_mode = cfg.get("processing", {}).get("stat_mode", "rms")
     value = _reduce(residual_map[mask], stat_mode) / max(roi_mean, 1e-6) * 100.0
