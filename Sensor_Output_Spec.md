@@ -51,6 +51,7 @@ Gainごとに下記項目を出力
     * flat_fitはそのGainのフラット画像スタック平均値を平面フィットさせてマップを作成
     * flat_frameはそのGainのフラット画像スタックの平均値を正規化してマップを作成
     * noneはゲインマップ補正なし
+  * フィット手法選択: gain_fit_method (poly|rbf)。rbfは計算時間が長くなるため注意
   * フィッティング法：config.processing.prnu\_fit（"LS" or "WLS"）※ μ-σ回帰を行う場合に適用
   * 使用回帰：config.processing.prnu\_fit（"LS" or "WLS"）
     ※ 平均フレームから ROI 平均を引いた残差の空間ばらつきを DSNU と同様の方法で統計化する。ただし PRNU は出力を ROI 平均信号値で正規化する（残差/μ × 100 \[%]）。
@@ -225,6 +226,7 @@ processing:
   mask_lower_margin: 0.0      # 飽和 DN_sat の一定割合以上を回帰に使う
   gain_map_mode : none        # self_fit | flat_fit | flat_frame | none  PRNUの算出時gain_map補正方法
   plane_fit_order: 2          # ROI内傾斜補正次数
+  gain_fit_method: poly       # poly | rbf  フィッティング手法
   read_noise_mode: 0          # 0:スタックstd, 1:差分std/√2
   prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
   exclude_abnormal_snr: true  # SNRが極端に低いROIを除外

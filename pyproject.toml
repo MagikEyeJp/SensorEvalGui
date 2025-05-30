@@ -12,7 +12,8 @@ dependencies = [
     "PyYAML>=6.0",
     "psutil>=5.9",
     "imagecodecs>=2023.7",
-    "roifile>=2023.9"
+    "roifile>=2023.9",
+    "scipy>=1.11,<2.0"
 ]
 
 [project.optional-dependencies]
