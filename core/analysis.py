@@ -40,6 +40,23 @@ __all__ = [
     "calculate_prnu_residual",
 ]
 
+# ───────────────────────────── cache helpers
+
+# Cache for loaded image stacks and calculated ROI statistics to
+# avoid repeated disk I/O and computations when functions are called
+# multiple times during a single session.
+_stack_cache: Dict[Path, np.ndarray] = {}
+_stats_cache: Dict[tuple[Path, float, float, bool], Dict[str, float]] = {}
+
+
+def _load_stack_cached(folder: Path) -> np.ndarray:
+    stack = _stack_cache.get(folder)
+    if stack is None:
+        stack = load_image_stack(folder)
+        _stack_cache[folder] = stack
+    return stack
+
+
 # ───────────────────────────── internal helpers
 
 
@@ -224,6 +241,8 @@ def extract_roi_stats(
     project_dir: Path | str,
     cfg: Dict[str, Any],
     status: Optional[Callable[[str], None]] = None,
+    *,
+    use_gain_map: bool = False,
 ) -> Dict[Tuple[float, float], Dict[str, float]]:
     """Compute mean, standard deviation and SNR for each ROI.
 
@@ -256,82 +275,8 @@ def extract_roi_stats(
     excl_low_snr = cfg["processing"].get("exclude_abnormal_snr", True)
     debug_stacks = cfg["output"].get("debug_stacks", False)
 
-    for gain_db, gfold in cfgutil.gain_entries(cfg):
-        for ratio, efold in cfgutil.exposure_entries(cfg):
-            folder = project_dir / gfold / efold
-            if not folder.is_dir():
-                logging.info("Skipping missing folder: %s", folder)
-                continue
-            logging.info(
-                "Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio
-            )
-            if status:
-                status(f"Loading images for gain {gain_db:.1f} dB")
-            stack = load_image_stack(folder)
-            if debug_stacks:
-                tifffile.imwrite(folder / "stack_cache.tiff", stack)
-
-            rects = chart_rects if "chart" in efold.lower() else flat_rects
-            idx = mid_idx if "chart" in efold.lower() else 0
-            if idx >= len(rects):
-                idx = 0
-            mask = _mask_from_rects(stack.shape[1:], [rects[idx]])
-            pix = stack[:, mask]
-            stat_mode = cfg["processing"].get("stat_mode", "rms")
-            mean = float(np.mean(pix))
-            noise_pix = np.std(pix, axis=0)
-            std = float(_reduce(noise_pix, stat_mode))
-            if std == 0:
-                logging.info("Skip due to zero std: %s", folder)
-                continue
-            if mean < min_sig_factor * std:
-                logging.info(
-                    "Skip due to low signal: mean %.2f < %.2f × %.2f",
-                    mean,
-                    min_sig_factor,
-                    std,
-                )
-                continue
-            snr = mean / std
-            if excl_low_snr and snr < snr_thresh:
-                logging.info(
-                    "Skip due to low SNR: %.2f dB < %.2f dB",
-                    20 * np.log10(snr),
-                    snr_thresh,
-                )
-                continue
-            res[(gain_db, ratio)] = {"mean": mean, "std": std, "snr": snr}
-    logging.info("Collected %d ROI stats", len(res))
-    return res
-
-
-def extract_roi_stats_gainmap(
-    project_dir: Path | str,
-    cfg: Dict[str, Any],
-    status: Optional[Callable[[str], None]] = None,
-) -> Dict[Tuple[float, float], Dict[str, float]]:
-    """Compute ROI stats with gain-map correction applied."""
-    project_dir = Path(project_dir)
-    res: Dict[Tuple[float, float], Dict[str, float]] = {}
-
-    chart_roi_file = project_dir / cfg["measurement"]["chart_roi_file"]
-    flat_roi_file = project_dir / cfg["measurement"]["flat_roi_file"]
-    chart_rects = load_rois(chart_roi_file)
-    flat_rects = load_rois(flat_roi_file)
-
-    mid_idx = cfg.get("reference", {}).get(
-        "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
-    )
-
-    snr_thresh = cfg["processing"].get("snr_threshold_dB", 10.0)
-    min_sig_factor = cfg["processing"].get("min_sig_factor", 3.0)
-    excl_low_snr = cfg["processing"].get("exclude_abnormal_snr", True)
-    debug_stacks = cfg["output"].get("debug_stacks", False)
-
     mode = cfg.get("processing", {}).get("gain_map_mode", "none")
-    if mode == "none":
-        return extract_roi_stats(project_dir, cfg, status=status)
-
+    apply_gain = use_gain_map and mode != "none"
     flat_cache: Dict[float, np.ndarray] = {}
 
     for gain_db, gfold in cfgutil.gain_entries(cfg):
@@ -345,39 +290,45 @@ def extract_roi_stats_gainmap(
             )
             if status:
                 status(f"Loading images for gain {gain_db:.1f} dB")
-            stack = load_image_stack(folder)
+            stack = _load_stack_cached(folder)
             if debug_stacks:
                 tifffile.imwrite(folder / "stack_cache.tiff", stack)
 
-            mask_fit = _mask_from_rects(stack.shape[1:], flat_rects)
-
-            flat_stack = None
-            if mode != "self_fit":
-                flat_stack = flat_cache.get(gain_db)
-                if flat_stack is None:
-                    flat_folder = cfgutil.find_gain_folder(
-                        project_dir, gain_db, cfg
-                    ) / cfg["measurement"].get("flat_lens_folder", "LensFlat")
-                    if status:
-                        status(f"Loading flat frames for gain {gain_db:.1f} dB")
-                    flat_stack = load_image_stack(flat_folder)
-                    flat_cache[gain_db] = flat_stack
-
-            gain_map = get_gain_map(
-                cfg,
-                mask_fit,
-                project_dir=project_dir,
-                gain_db=gain_db,
-                stack=stack if mode == "self_fit" else flat_stack,
-            )
-
-            corrected = stack if gain_map is None else stack / gain_map
+            corrected = stack
+            if apply_gain:
+                mask_fit = _mask_from_rects(stack.shape[1:], flat_rects)
+                flat_stack = None
+                if mode != "self_fit":
+                    flat_stack = flat_cache.get(gain_db)
+                    if flat_stack is None:
+                        flat_folder = cfgutil.find_gain_folder(
+                            project_dir, gain_db, cfg
+                        ) / cfg["measurement"].get("flat_lens_folder", "LensFlat")
+                        if status:
+                            status(f"Loading flat frames for gain {gain_db:.1f} dB")
+                        flat_stack = _load_stack_cached(flat_folder)
+                        flat_cache[gain_db] = flat_stack
+                gain_map = get_gain_map(
+                    cfg,
+                    mask_fit,
+                    project_dir=project_dir,
+                    gain_db=gain_db,
+                    stack=stack if mode == "self_fit" else flat_stack,
+                )
+                corrected = stack if gain_map is None else stack / gain_map
 
             rects = chart_rects if "chart" in efold.lower() else flat_rects
             idx = mid_idx if "chart" in efold.lower() else 0
             if idx >= len(rects):
                 idx = 0
             mask = _mask_from_rects(stack.shape[1:], [rects[idx]])
+
+            cache_key = (folder, gain_db, ratio, apply_gain)
+            cached = _stats_cache.get(cache_key)
+            if cached:
+                res[(gain_db, ratio)] = cached
+                continue
+
             pix = corrected[:, mask]
             stat_mode = cfg["processing"].get("stat_mode", "rms")
             mean = float(np.mean(pix))
@@ -402,9 +353,29 @@ def extract_roi_stats_gainmap(
                     snr_thresh,
                 )
                 continue
-            res[(gain_db, ratio)] = {"mean": mean, "std": std, "snr": snr}
-    logging.info("Collected %d ROI stats (gain-corrected)", len(res))
+            vals = {"mean": mean, "std": std, "snr": snr}
+            res[(gain_db, ratio)] = vals
+            _stats_cache[cache_key] = vals
+    logging.info(
+        "Collected %d ROI stats%s",
+        len(res),
+        " (gain-corrected)" if apply_gain else "",
+    )
     return res
+
+
+def extract_roi_stats_gainmap(
+    project_dir: Path | str,
+    cfg: Dict[str, Any],
+    status: Optional[Callable[[str], None]] = None,
+) -> Dict[Tuple[float, float], Dict[str, float]]:
+    """Compute ROI stats with gain-map correction applied."""
+    return extract_roi_stats(
+        project_dir,
+        cfg,
+        status=status,
+        use_gain_map=True,
+    )
 
 
 def extract_roi_table(
