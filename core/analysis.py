@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Tuple, Any, List
+from typing import Dict, Tuple, Any, List, Optional, Callable
 import os
 import logging
 
@@ -162,7 +162,9 @@ def get_gain_map(
 
 
 def extract_roi_stats(
-    project_dir: Path | str, cfg: Dict[str, Any]
+    project_dir: Path | str,
+    cfg: Dict[str, Any],
+    status: Optional[Callable[[str], None]] = None,
 ) -> Dict[Tuple[float, float], Dict[str, float]]:
     """Compute mean, standard deviation and SNR for each ROI.
 
@@ -204,6 +206,8 @@ def extract_roi_stats(
             logging.info(
                 "Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio
             )
+            if status:
+                status(f"Loading images for gain {gain_db:.1f} dB")
             stack = load_image_stack(folder)
             if debug_stacks:
                 tifffile.imwrite(folder / "stack_cache.tiff", stack)
@@ -243,7 +247,9 @@ def extract_roi_stats(
 
 
 def extract_roi_stats_gainmap(
-    project_dir: Path | str, cfg: Dict[str, Any]
+    project_dir: Path | str,
+    cfg: Dict[str, Any],
+    status: Optional[Callable[[str], None]] = None,
 ) -> Dict[Tuple[float, float], Dict[str, float]]:
     """Compute ROI stats with gain-map correction applied."""
     project_dir = Path(project_dir)
@@ -265,7 +271,7 @@ def extract_roi_stats_gainmap(
 
     mode = cfg.get("processing", {}).get("gain_map_mode", "none")
     if mode == "none":
-        return extract_roi_stats(project_dir, cfg)
+        return extract_roi_stats(project_dir, cfg, status=status)
 
     flat_cache: Dict[float, np.ndarray] = {}
 
@@ -278,6 +284,8 @@ def extract_roi_stats_gainmap(
             logging.info(
                 "Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio
             )
+            if status:
+                status(f"Loading images for gain {gain_db:.1f} dB")
             stack = load_image_stack(folder)
             if debug_stacks:
                 tifffile.imwrite(folder / "stack_cache.tiff", stack)
@@ -291,6 +299,8 @@ def extract_roi_stats_gainmap(
                     flat_folder = cfgutil.find_gain_folder(
                         project_dir, gain_db, cfg
                     ) / cfg["measurement"].get("flat_lens_folder", "LensFlat")
+                    if status:
+                        status(f"Loading flat frames for gain {gain_db:.1f} dB")
                     flat_stack = load_image_stack(flat_folder)
                     flat_cache[gain_db] = flat_stack
 
@@ -614,7 +624,10 @@ def calculate_dark_noise(
 
 
 def calculate_dark_noise_gain(
-    project_dir: Path | str, gain_db: float, cfg: Dict[str, Any]
+    project_dir: Path | str,
+    gain_db: float,
+    cfg: Dict[str, Any],
+    status: Optional[Callable[[str], None]] = None,
 ) -> Tuple[float, float, np.ndarray, np.ndarray]:
     """Calculate dark noise metrics for a specific gain setting.
 
@@ -634,6 +647,8 @@ def calculate_dark_noise_gain(
     """
     gain_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg)
     dark_folder = gain_folder / cfg["measurement"].get("dark_folder", "dark")
+    if status:
+        status(f"Loading dark frames for gain {gain_db:.1f} dB")
     stack = load_image_stack(dark_folder)
 
     roi_file = project_dir / cfg["measurement"].get("flat_roi_file")
