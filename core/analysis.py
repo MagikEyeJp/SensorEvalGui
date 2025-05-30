@@ -35,6 +35,7 @@ __all__ = [
     "calculate_snr_at_half",
     "calculate_dn_at_snr_one",
     "fit_gain_map",
+    "get_gain_map",
     "calculate_pseudo_prnu",
     "calculate_prnu_residual",
 ]
@@ -96,6 +97,65 @@ def fit_gain_map(frame: np.ndarray, mask: np.ndarray, order: int) -> np.ndarray:
     gain_max = np.max(fitted[mask])
     fitted /= max(gain_max, 1e-6)
     return fitted
+
+
+def get_gain_map(
+    cfg: Dict[str, Any],
+    mask: np.ndarray,
+    project_dir: Path | str | None = None,
+    gain_db: float | None = None,
+    stack: np.ndarray | None = None,
+) -> np.ndarray | None:
+    """Return gain map according to ``cfg['processing']['gain_map_mode']``.
+
+    Parameters
+    ----------
+    cfg:
+        Parsed configuration dictionary.
+    mask:
+        Boolean mask for plane fitting.
+    project_dir:
+        Project directory to load reference flats for ``flat_`` modes.
+    gain_db:
+        Gain level used to locate reference flats.
+    stack:
+        Image stack used when the mode is ``self_fit`` or to avoid reloading
+        reference flats.
+
+    Returns
+    -------
+    np.ndarray | None
+        Gain map normalized by its maximum, or ``None`` if no correction is
+        requested.
+    """
+
+    mode = cfg.get("processing", {}).get("gain_map_mode", "none")
+    if mode == "none":
+        return None
+
+    order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
+
+    if mode == "self_fit" or project_dir is None or gain_db is None:
+        if stack is None:
+            raise ValueError("stack is required for self_fit gain map")
+        mean_src = np.mean(stack, axis=0)
+    else:
+        if stack is None:
+            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
+                "measurement"
+            ].get("flat_lens_folder", "LensFlat")
+            stack = load_image_stack(flat_folder)
+        mean_src = np.mean(stack, axis=0)
+
+    if mode == "flat_frame":
+        gain_map = mean_src
+        gain_map = np.where(gain_map == 0, 1e-6, gain_map)
+        gain_max = np.max(gain_map[mask])
+        gain_map /= max(gain_max, 1e-6)
+    else:
+        gain_map = fit_gain_map(mean_src, mask, order)
+
+    return gain_map
 
 
 # ───────────────────────────── public api
@@ -202,7 +262,6 @@ def extract_roi_stats_gainmap(
     min_sig_factor = cfg["processing"].get("min_sig_factor", 3.0)
     excl_low_snr = cfg["processing"].get("exclude_abnormal_snr", True)
     debug_stacks = cfg["output"].get("debug_stacks", False)
-    order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
 
     mode = cfg.get("processing", {}).get("gain_map_mode", "none")
     if mode == "none":
@@ -224,10 +283,9 @@ def extract_roi_stats_gainmap(
                 tifffile.imwrite(folder / "stack_cache.tiff", stack)
 
             mask_fit = _mask_from_rects(stack.shape[1:], flat_rects)
-            if mode == "self_fit":
-                mean_src = np.mean(stack, axis=0)
-                gain_map = fit_gain_map(mean_src, mask_fit, order)
-            else:
+
+            flat_stack = None
+            if mode != "self_fit":
                 flat_stack = flat_cache.get(gain_db)
                 if flat_stack is None:
                     flat_folder = cfgutil.find_gain_folder(
@@ -235,16 +293,16 @@ def extract_roi_stats_gainmap(
                     ) / cfg["measurement"].get("flat_lens_folder", "LensFlat")
                     flat_stack = load_image_stack(flat_folder)
                     flat_cache[gain_db] = flat_stack
-                mean_src = np.mean(flat_stack, axis=0)
-                if mode == "flat_fit":
-                    gain_map = fit_gain_map(mean_src, mask_fit, order)
-                else:  # flat_frame
-                    gain_map = mean_src
-            if mode == "flat_frame":
-                gain_map = np.where(gain_map == 0, 1e-6, gain_map)
-                gain_max = np.max(gain_map[mask_fit])
-                gain_map /= max(gain_max, 1e-6)
-            corrected = stack / gain_map
+
+            gain_map = get_gain_map(
+                cfg,
+                mask_fit,
+                project_dir=project_dir,
+                gain_db=gain_db,
+                stack=stack if mode == "self_fit" else flat_stack,
+            )
+
+            corrected = stack if gain_map is None else stack / gain_map
 
             rects = chart_rects if "chart" in efold.lower() else flat_rects
             idx = mid_idx if "chart" in efold.lower() else 0
@@ -680,24 +738,20 @@ def calculate_pseudo_prnu(
         mask &= mean_frame <= margin * dn_sat
 
     mode = cfg.get("processing", {}).get("gain_map_mode", "none")
-    order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
 
-    if mode != "none":
-        if mode == "self_fit" or project_dir is None or gain_db is None:
-            mean_src = mean_frame
-        else:
-            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
-                "measurement"
-            ].get("flat_lens_folder", "LensFlat")
-            ref_stack = load_image_stack(flat_folder)
-            mean_src = np.mean(ref_stack, axis=0)
-        if mode == "flat_frame":
-            gain_map = mean_src
-            gain_map = np.where(gain_map == 0, 1e-6, gain_map)
-            gain_max = np.max(gain_map[mask])
-            gain_map /= max(gain_max, 1e-6)
-        else:
-            gain_map = fit_gain_map(mean_src, mask, order)
+    gain_map = get_gain_map(
+        cfg,
+        mask,
+        project_dir=project_dir,
+        gain_db=gain_db,
+        stack=(
+            flat_stack
+            if mode == "self_fit" or project_dir is None or gain_db is None
+            else None
+        ),
+    )
+
+    if gain_map is not None:
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
         std_frame = np.std(corrected, axis=0)
@@ -748,24 +802,20 @@ def calculate_prnu_residual(
         mask &= mean_frame <= margin * dn_sat
 
     mode = cfg.get("processing", {}).get("gain_map_mode", "none")
-    order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
 
-    if mode != "none":
-        if mode == "self_fit" or project_dir is None or gain_db is None:
-            mean_src = mean_frame
-        else:
-            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
-                "measurement"
-            ].get("flat_lens_folder", "LensFlat")
-            ref_stack = load_image_stack(flat_folder)
-            mean_src = np.mean(ref_stack, axis=0)
-        if mode == "flat_frame":
-            gain_map = mean_src
-            gain_map = np.where(gain_map == 0, 1e-6, gain_map)
-            gain_max = np.max(gain_map[mask])
-            gain_map /= max(gain_max, 1e-6)
-        else:
-            gain_map = fit_gain_map(mean_src, mask, order)
+    gain_map = get_gain_map(
+        cfg,
+        mask,
+        project_dir=project_dir,
+        gain_db=gain_db,
+        stack=(
+            flat_stack
+            if mode == "self_fit" or project_dir is None or gain_db is None
+            else None
+        ),
+    )
+
+    if gain_map is not None:
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
 
