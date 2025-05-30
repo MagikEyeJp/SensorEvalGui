@@ -44,6 +44,7 @@ processing:
   snr_threshold_dB: 10             # SNR threshold for DR
   min_sig_factor: 3                # Guard: mean ≥ N×σ
   mask_upper_margin: 0.85          # Use pixels < margin*DN_sat for fitting
+  mask_lower_margin: 0.0           # Use pixels >= margin*DN_sat for fitting
   gain_map_mode: none              # self_fit | flat_fit | flat_frame | none
                                   # gain map is scaled by its maximum
   plane_fit_order: 2               # Polynomial order for plane fitting

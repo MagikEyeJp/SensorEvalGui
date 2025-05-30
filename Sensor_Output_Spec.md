@@ -222,6 +222,7 @@ processing:
   snr_threshold_dB: 10       # SNR評価での可視限界（10dB など）
   min_sig_factor: 3           # σ_read の n倍以上を有効信号とみなす
   mask_upper_margin: 0.85     # 飽和 DN_sat の 90 % 未満を回帰に使う
+  mask_lower_margin: 0.0      # 飽和 DN_sat の一定割合以上を回帰に使う
   gain_map_mode : none        # self_fit | flat_fit | flat_frame | none  PRNUの算出時gain_map補正方法
   plane_fit_order: 2          # ROI内傾斜補正次数
   read_noise_mode: 0          # 0:スタックstd, 1:差分std/√2
