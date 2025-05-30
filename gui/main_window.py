@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QSplitter,
     QSizePolicy,
+    QGridLayout,
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import QThread, Signal, Qt, QTimer
@@ -560,16 +561,22 @@ class MainWindow(QMainWindow):
     def _create_canvas(self, figures: Sequence[Figure]) -> QWidget:
         """Return QWidget with interactive matplotlib canvases."""
         w_container = QWidget()
-        layout = QVBoxLayout()
+        layout = QGridLayout()
         layout.setContentsMargins(0, 0, 0, 0)
 
-        for fig in figures:
+        for idx, fig in enumerate(figures):
+            vbox = QVBoxLayout()
             canvas = FigureCanvas(fig)
             canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.canvases.append(canvas)
             toolbar = NavigationToolbar2QT(canvas, None)
-            layout.addWidget(toolbar)
-            layout.addWidget(canvas)
+            vbox.addWidget(toolbar)
+            vbox.addWidget(canvas)
+            widget = QWidget()
+            widget.setLayout(vbox)
+            row = idx // 2
+            col = idx % 2
+            layout.addWidget(widget, row, col)
 
         w_container.setLayout(layout)
 
