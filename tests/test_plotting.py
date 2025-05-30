@@ -69,3 +69,40 @@ def test_plot_heatmap_vmin_vmax(tmp_path):
         vmax=3.0,
     )
     assert (tmp_path / "heat.png").is_file()
+
+
+def _get_scatter_xy(ax):
+    coll = ax.collections[0]
+    return coll.get_offsets().data[:, 0], coll.get_offsets().data[:, 1]
+
+
+def test_plot_prnu_regression_labels(tmp_path):
+    data = {0.0: (np.array([1.0, 2.0]), np.array([0.5, 1.0]))}
+    fig = plotting.plot_prnu_regression(
+        data,
+        {"plot": {"prnu_squared": False}},
+        tmp_path / "prnu.png",
+        return_fig=True,
+    )
+    ax = fig.axes[0]
+    x, y = _get_scatter_xy(ax)
+    assert ax.get_xlabel() == "Mean (DN)"
+    assert ax.get_ylabel() == "Std (DN)"
+    assert x[0] == pytest.approx(1.0)
+    assert y[0] == pytest.approx(0.5)
+
+
+def test_plot_prnu_regression_labels_squared(tmp_path):
+    data = {0.0: (np.array([2.0]), np.array([3.0]))}
+    fig = plotting.plot_prnu_regression(
+        data,
+        {"plot": {"prnu_squared": True}},
+        tmp_path / "prnu_sq.png",
+        return_fig=True,
+    )
+    ax = fig.axes[0]
+    x, y = _get_scatter_xy(ax)
+    assert ax.get_xlabel() == "Mean^2 (DN^2)"
+    assert ax.get_ylabel() == "Std^2 (DN^2)"
+    assert x[0] == pytest.approx(4.0)
+    assert y[0] == pytest.approx(9.0)

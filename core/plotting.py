@@ -193,31 +193,37 @@ def plot_prnu_regression(
 
     fig = plt.figure()
     fit_mode = cfg.get("processing", {}).get("prnu_fit", "LS").upper()
+    squared = bool(cfg.get("plot", {}).get("prnu_squared", False))
     cmap = plt.cm.get_cmap("tab10")
 
     for idx, (gain, (means, stds)) in enumerate(sorted(data.items())):
         means = _validate_positive_finite(means, "mean")
         stds = _validate_positive_finite(stds, "std")
         color = cmap(idx % 10)
-        plt.scatter(means, stds, s=8, alpha=0.6, color=color, label=f"{gain:g}dB")
+        x = means**2 if squared else means
+        y = stds**2 if squared else stds
+        plt.scatter(x, y, s=8, alpha=0.6, color=color, label=f"{gain:g}dB")
         if means.size > 1:
             if fit_mode == "WLS":
-                w = 1.0 / np.maximum(stds, 1e-6)
-                p = np.polyfit(means, stds, 1, w=w)
+                weight = stds ** (2 if squared else 1)
+                w = 1.0 / np.maximum(weight, 1e-6)
+                p = np.polyfit(x, y, 1, w=w)
             else:
-                p = np.polyfit(means, stds, 1)
-            x = np.linspace(means.min(), means.max(), 100)
-            y = np.polyval(p, x)
+                p = np.polyfit(x, y, 1)
+            x_fit = np.linspace(x.min(), x.max(), 100)
+            y_fit = np.polyval(p, x_fit)
             plt.plot(
-                x,
-                y,
+                x_fit,
+                y_fit,
                 linestyle="--",
                 color=color,
                 label=f"{gain:g}dB fit: y={p[0]:.3f}x+{p[1]:.3f}",
             )
 
-    plt.xlabel("Mean (DN)")
-    plt.ylabel("Std (DN)")
+    xlabel = "Mean^2 (DN^2)" if squared else "Mean (DN)"
+    ylabel = "Std^2 (DN^2)" if squared else "Std (DN)"
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
     plt.title("PRNU Regression")
     plt.grid(True)
     plt.legend(fontsize=8)
