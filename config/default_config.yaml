@@ -49,6 +49,7 @@ processing:
                                   # gain map is scaled by its maximum
   plane_fit_order: 2               # Polynomial order for plane fitting
   gain_fit_method: poly            # poly | rbf
+  rbf_subsample: 1                # Subsampling step for rbf fitting
   read_noise_mode: 0               # 0: use std of stack, 1: use std of frame diff / √2
   prnu_fit: LS                     # LS or WLS regression method
   exclude_abnormal_snr: true       # Ignore low‑SNR patches

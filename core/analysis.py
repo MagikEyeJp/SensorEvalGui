@@ -92,20 +92,37 @@ def fit_gain_map_rbf(
     mask: np.ndarray,
     smooth: float = 0.0,
     function: str = "thin_plate",
+    *,
+    subsample_step: int = 1,
 ) -> np.ndarray:
-    """Return RBF-interpolated gain map for ``frame`` using ``mask`` pixels."""
+    """Return RBF-interpolated gain map for ``frame`` using ``mask`` pixels.
+
+    ``subsample_step`` > 1 reduces the number of sample points by selecting
+    every ``n``th pixel before fitting, which lowers the memory cost.
+    """
 
     try:
         from scipy.interpolate import Rbf
     except Exception as exc:  # pragma: no cover - runtime dependency missing
         raise RuntimeError("scipy is required for RBF fitting") from exc
 
-    y, x = np.indices(frame.shape)
-    xm, ym = x[mask].ravel(), y[mask].ravel()
-    z = frame[mask].ravel()
+    step = max(int(subsample_step), 1)
+    y_full, x_full = np.indices(frame.shape)
+
+    if step > 1:
+        frame_sub = frame[::step, ::step]
+        mask_sub = mask[::step, ::step]
+        y_sub, x_sub = np.indices(frame_sub.shape)
+        xm = (x_sub[mask_sub] * step).ravel()
+        ym = (y_sub[mask_sub] * step).ravel()
+        z = frame_sub[mask_sub].ravel()
+    else:
+        xm = x_full[mask].ravel()
+        ym = y_full[mask].ravel()
+        z = frame[mask].ravel()
 
     rbf = Rbf(xm, ym, z, function=function, smooth=smooth)
-    fitted = rbf(x, y)
+    fitted = rbf(x_full, y_full)
 
     fitted = np.where(fitted == 0, 1e-6, fitted)
     gain_max = np.max(fitted[mask])
@@ -119,6 +136,7 @@ def fit_gain_map(
     order: int,
     *,
     method: str = "poly",
+    subsample_step: int = 1,
 ) -> np.ndarray:
     """Return a plane-fit gain map for ``frame`` using ``mask`` pixels.
 
@@ -146,7 +164,9 @@ def fit_gain_map(
     )
 
     if method == "rbf":
-        return fit_gain_map_rbf(frame, mask, smooth=float(order))
+        return fit_gain_map_rbf(
+            frame, mask, smooth=float(order), subsample_step=subsample_step
+        )
 
     if order <= 0:
         c = float(np.mean(frame[mask]))
@@ -282,7 +302,14 @@ def get_gain_map(
             float(np.max(gain_map)),
         )
     else:
-        gain_map = fit_gain_map(mean_src, mask, order, method=method)
+        subsample = int(cfg.get("processing", {}).get("rbf_subsample", 1))
+        gain_map = fit_gain_map(
+            mean_src,
+            mask,
+            order,
+            method=method,
+            subsample_step=subsample,
+        )
         logging.debug(
             "Fit gain map result: min=%.3g max=%.3g",
             float(np.min(gain_map)),
