@@ -96,6 +96,7 @@ def fit_gain_map_rbf(
     function: str = "thin_plate",
     *,
     subsample_step: int = 1,
+    subsample_method: str = "uniform",
 ) -> np.ndarray:
     """Return RBF-interpolated gain map for ``frame`` using ``mask`` pixels.
 
@@ -112,12 +113,20 @@ def fit_gain_map_rbf(
     y_full, x_full = np.indices(frame.shape)
 
     if step > 1:
-        frame_sub = frame[::step, ::step]
-        mask_sub = mask[::step, ::step]
-        y_sub, x_sub = np.indices(frame_sub.shape)
-        xm = (x_sub[mask_sub] * step).ravel()
-        ym = (y_sub[mask_sub] * step).ravel()
-        z = frame_sub[mask_sub].ravel()
+        if subsample_method == "uniform":
+            frame_sub = frame[::step, ::step]
+            mask_sub = mask[::step, ::step]
+            y_sub, x_sub = np.indices(frame_sub.shape)
+            xm = (x_sub[mask_sub] * step).ravel()
+            ym = (y_sub[mask_sub] * step).ravel()
+            z = frame_sub[mask_sub].ravel()
+        else:
+            coords = np.argwhere(mask)
+            n = max(1, coords.shape[0] // (step**2))
+            idx = np.random.choice(coords.shape[0], n, replace=False)
+            ym = coords[idx, 0]
+            xm = coords[idx, 1]
+            z = frame[ym, xm]
     else:
         xm = x_full[mask].ravel()
         ym = y_full[mask].ravel()
@@ -137,6 +146,7 @@ def fit_gain_map_akima(
     mask: np.ndarray,
     *,
     subsample_step: int = 1,
+    subsample_method: str = "uniform",
 ) -> np.ndarray:
     """Return gain map using sequential Akima interpolation."""
 
@@ -151,6 +161,18 @@ def fit_gain_map_akima(
     frame_sub = frame[::step, ::step]
     y_sub = y_full[::step]
     x_sub = x_full[::step]
+    if y_sub[-1] != y_full[-1]:
+        y_sub = np.append(y_sub, y_full[-1])
+        frame_sub = np.vstack([frame_sub, frame[y_full[-1], ::step]])
+    if x_sub[-1] != x_full[-1]:
+        x_sub = np.append(x_sub, x_full[-1])
+        frame_sub = np.hstack([frame_sub, frame_sub[:, -1][:, None]])
+    if y_sub[-1] != y_full[-1]:
+        y_sub = np.append(y_sub, y_full[-1])
+        frame_sub = np.vstack([frame_sub, frame[y_full[-1], ::step]])
+    if x_sub[-1] != x_full[-1]:
+        x_sub = np.append(x_sub, x_full[-1])
+        frame_sub = np.hstack([frame_sub, frame_sub[:, -1][:, None]])
 
     interp_x = Akima1DInterpolator(x_sub, frame_sub, axis=1)
     temp = interp_x(x_full)
@@ -168,6 +190,7 @@ def fit_gain_map_hermite(
     mask: np.ndarray,
     *,
     subsample_step: int = 1,
+    subsample_method: str = "uniform",
 ) -> np.ndarray:
     """Return gain map using sequential Hermite interpolation."""
 
@@ -203,6 +226,7 @@ def fit_gain_map(
     *,
     method: str = "poly",
     subsample_step: int = 1,
+    subsample_method: str = "uniform",
 ) -> np.ndarray:
     """Return a plane-fit gain map for ``frame`` using ``mask`` pixels.
 
@@ -231,20 +255,51 @@ def fit_gain_map(
 
     if method == "rbf":
         return fit_gain_map_rbf(
-            frame, mask, smooth=float(order), subsample_step=subsample_step
+            frame,
+            mask,
+            smooth=float(order),
+            subsample_step=subsample_step,
+            subsample_method=subsample_method,
         )
     if method == "akima":
-        return fit_gain_map_akima(frame, mask, subsample_step=subsample_step)
+        return fit_gain_map_akima(
+            frame,
+            mask,
+            subsample_step=subsample_step,
+            subsample_method=subsample_method,
+        )
     if method == "hermite":
-        return fit_gain_map_hermite(frame, mask, subsample_step=subsample_step)
+        return fit_gain_map_hermite(
+            frame,
+            mask,
+            subsample_step=subsample_step,
+            subsample_method=subsample_method,
+        )
 
     if order <= 0:
         c = float(np.mean(frame[mask]))
         fitted = np.full_like(frame, c)
     else:
+        step = max(int(subsample_step), 1)
         y, x = np.indices(frame.shape)
-        xm, ym = x[mask].ravel(), y[mask].ravel()
-        z = frame[mask].ravel()
+        if step > 1:
+            if subsample_method == "uniform":
+                frame_sub = frame[::step, ::step]
+                mask_sub = mask[::step, ::step]
+                y_sub, x_sub = np.indices(frame_sub.shape)
+                xm = (x_sub[mask_sub] * step).ravel()
+                ym = (y_sub[mask_sub] * step).ravel()
+                z = frame_sub[mask_sub].ravel()
+            else:
+                coords = np.argwhere(mask)
+                n = max(1, coords.shape[0] // (step**2))
+                idx = np.random.choice(coords.shape[0], n, replace=False)
+                ym = coords[idx, 0]
+                xm = coords[idx, 1]
+                z = frame[ym, xm]
+        else:
+            xm, ym = x[mask].ravel(), y[mask].ravel()
+            z = frame[mask].ravel()
 
         cols = []
         for i in range(order + 1):
@@ -384,13 +439,16 @@ def get_gain_map(
             float(np.max(gain_map)),
         )
     else:
-        subsample = int(cfg.get("processing", {}).get("rbf_subsample", 1))
+        proc = cfg.get("processing", {})
+        subsample = int(proc.get("fit_subsample_step", 1))
+        subsample_method_cfg = proc.get("subsample_method", "uniform")
         gain_map = fit_gain_map(
             mean_src,
             mask,
             order,
             method=method,
             subsample_step=subsample,
+            subsample_method=subsample_method_cfg,
         )
         logging.debug(
             "Fit gain map result: min=%.3g max=%.3g",
