@@ -34,6 +34,8 @@ __all__ = [
     "calculate_dn_at_snr",
     "calculate_snr_at_half",
     "calculate_dn_at_snr_one",
+    "fit_gain_map_akima",
+    "fit_gain_map_hermite",
     "fit_gain_map_rbf",
     "fit_gain_map",
     "get_gain_map",
@@ -130,6 +132,70 @@ def fit_gain_map_rbf(
     return fitted
 
 
+def fit_gain_map_akima(
+    frame: np.ndarray,
+    mask: np.ndarray,
+    *,
+    subsample_step: int = 1,
+) -> np.ndarray:
+    """Return gain map using sequential Akima interpolation."""
+
+    try:
+        from scipy.interpolate import Akima1DInterpolator
+    except Exception as exc:  # pragma: no cover - runtime dependency missing
+        raise RuntimeError("scipy is required for Akima fitting") from exc
+
+    step = max(int(subsample_step), 1)
+    y_full = np.arange(frame.shape[0])
+    x_full = np.arange(frame.shape[1])
+    frame_sub = frame[::step, ::step]
+    y_sub = y_full[::step]
+    x_sub = x_full[::step]
+
+    interp_x = Akima1DInterpolator(x_sub, frame_sub, axis=1)
+    temp = interp_x(x_full)
+    interp_y = Akima1DInterpolator(y_sub, temp, axis=0)
+    fitted = interp_y(y_full)
+
+    fitted = np.where(fitted == 0, 1e-6, fitted)
+    gain_max = np.max(fitted[mask])
+    fitted /= max(gain_max, 1e-6)
+    return fitted
+
+
+def fit_gain_map_hermite(
+    frame: np.ndarray,
+    mask: np.ndarray,
+    *,
+    subsample_step: int = 1,
+) -> np.ndarray:
+    """Return gain map using sequential Hermite interpolation."""
+
+    try:
+        from scipy.interpolate import CubicHermiteSpline
+    except Exception as exc:  # pragma: no cover - runtime dependency missing
+        raise RuntimeError("scipy is required for Hermite fitting") from exc
+
+    step = max(int(subsample_step), 1)
+    y_full = np.arange(frame.shape[0])
+    x_full = np.arange(frame.shape[1])
+    frame_sub = frame[::step, ::step]
+    y_sub = y_full[::step]
+    x_sub = x_full[::step]
+
+    dx = np.gradient(frame_sub, axis=1)
+    herm_x = CubicHermiteSpline(x_sub, frame_sub, dx, axis=1)
+    temp = herm_x(x_full)
+    dy = np.gradient(temp, axis=0)
+    herm_y = CubicHermiteSpline(y_sub, temp, dy, axis=0)
+    fitted = herm_y(y_full)
+
+    fitted = np.where(fitted == 0, 1e-6, fitted)
+    gain_max = np.max(fitted[mask])
+    fitted /= max(gain_max, 1e-6)
+    return fitted
+
+
 def fit_gain_map(
     frame: np.ndarray,
     mask: np.ndarray,
@@ -167,6 +233,10 @@ def fit_gain_map(
         return fit_gain_map_rbf(
             frame, mask, smooth=float(order), subsample_step=subsample_step
         )
+    if method == "akima":
+        return fit_gain_map_akima(frame, mask, subsample_step=subsample_step)
+    if method == "hermite":
+        return fit_gain_map_hermite(frame, mask, subsample_step=subsample_step)
 
     if order <= 0:
         c = float(np.mean(frame[mask]))
@@ -287,7 +357,19 @@ def get_gain_map(
                 float(np.max(mean_src)),
             )
 
-    if mask is None:
+    clip_margin = bool(cfg.get("processing", {}).get("gain_clip_margin", False))
+
+    if clip_margin:
+        proc = cfg.get("processing", {})
+        lower = proc.get("mask_lower_margin")
+        upper = proc.get("mask_upper_margin")
+        if lower is not None or upper is not None:
+            dn_sat = calculate_dn_sat(stack, cfg)
+            lo = 0.0 if lower is None else float(lower) * dn_sat
+            hi = float("inf") if upper is None else float(upper) * dn_sat
+            mean_src = np.clip(mean_src, lo, hi)
+        mask = np.ones_like(mean_src, bool)
+    elif mask is None:
         mask = _gain_fit_mask(stack, cfg)
 
     if mode == "flat_frame":
