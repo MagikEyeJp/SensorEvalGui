@@ -460,9 +460,8 @@ class MainWindow(QMainWindow):
         self.run_btn = QPushButton("RUN")
         self.run_btn.setEnabled(False)
         self.run_btn.clicked.connect(self.run_analysis)
-        modifier = "Meta" if sys.platform == "darwin" else "Ctrl"
-        self.sel_btn.setShortcut(QKeySequence(f"{modifier}+O"))
-        self.run_btn.setShortcut(QKeySequence(f"{modifier}+R"))
+        self.sel_btn.setShortcut(QKeySequence("Ctrl+O"))
+        self.run_btn.setShortcut(QKeySequence("Ctrl+R"))
 
         self.status = QLabel("Ready")
         self.progress = QProgressBar()
