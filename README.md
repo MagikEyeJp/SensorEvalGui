@@ -89,7 +89,8 @@ For a comprehensive description of each output file, refer to
 	•	PRNU and black-level correction logic
         •       `gain_map_mode` normalizes the gain map by its maximum for relative correction
         •       `rbf_subsample` subsamples pixels before RBF fitting to reduce memory usage
-        •       `gain_fit_method` chooses polynomial (`poly`) or radial basis (`rbf`) fitting
+        •       `gain_fit_method` chooses `poly`, `rbf`, `akima`, or `hermite` fitting
+        •       `gain_clip_margin` clips pixels outside margins before fitting
 	•	Optional Excel/Markdown export
 	•	CI tests (PyTest + GitHub Actions)
 
