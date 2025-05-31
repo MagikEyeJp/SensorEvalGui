@@ -52,7 +52,7 @@ Gainごとに下記項目を出力
     * flat_frameはそのGainのフラット画像スタックの平均値を正規化してマップを作成
     * noneはゲインマップ補正なし
   * フィット手法選択: gain_fit_method (poly|rbf|akima|hermite)。rbfは計算時間が長くなるため注意
-  * RBFフィット時に画素を間引く rbf_subsample も指定可能
+  * サブサンプリング指定: fit_subsample_step と subsample_method (uniform|random)
   * フィッティング法：config.processing.prnu\_fit（"LS" or "WLS"）※ μ-σ回帰を行う場合に適用
   * 使用回帰：config.processing.prnu\_fit（"LS" or "WLS"）
     ※ 平均フレームから ROI 平均を引いた残差の空間ばらつきを DSNU と同様の方法で統計化する。ただし PRNU は出力を ROI 平均信号値で正規化する（残差/μ × 100 \[%]）。
@@ -228,8 +228,9 @@ processing:
   gain_map_mode : none        # self_fit | flat_fit | flat_frame | none  PRNUの算出時gain_map補正方法
   plane_fit_order: 2          # ROI内傾斜補正次数
   gain_fit_method: poly       # poly | rbf | akima | hermite  フィッティング手法
-  * RBFフィット時に画素を間引く rbf_subsample も指定可能
-  rbf_subsample: 1            # RBFフィット用のサブサンプリング間隔
+  * サブサンプリング指定: fit_subsample_step と subsample_method
+  fit_subsample_step: 1       # フィッティング用のサブサンプル間隔
+  subsample_method: uniform   # uniform または random
   gain_clip_margin: false     # マージン外ピクセルをクリップしてからフィット
   read_noise_mode: 0          # 0:スタックstd, 1:差分std/√2
   prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法

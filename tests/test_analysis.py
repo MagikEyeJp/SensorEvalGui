@@ -413,3 +413,45 @@ def test_fit_gain_map_rbf_basic():
     res = analysis.fit_gain_map(frame, mask, order=0, method="rbf")
     assert res.shape == frame.shape
     assert np.allclose(np.max(res), 1.0)
+
+
+@pytest.mark.parametrize(
+    "method,order",
+    [
+        ("poly", 1),
+        ("rbf", 0),
+        ("akima", 0),
+        ("hermite", 0),
+    ],
+)
+def test_fit_gain_map_subsample_uniform(method, order):
+    if method != "poly":
+        pytest.importorskip("scipy")
+    frame = np.arange(64, dtype=float).reshape(8, 8)
+    mask = np.ones_like(frame, dtype=bool)
+    res = analysis.fit_gain_map(
+        frame,
+        mask,
+        order=order,
+        method=method,
+        subsample_step=2,
+    )
+    assert res.shape == frame.shape
+
+
+@pytest.mark.parametrize("method,order", [("poly", 1), ("rbf", 0)])
+def test_fit_gain_map_subsample_random(method, order):
+    if method == "rbf":
+        pytest.importorskip("scipy")
+    np.random.seed(0)
+    frame = np.arange(64, dtype=float).reshape(8, 8)
+    mask = np.ones_like(frame, dtype=bool)
+    res = analysis.fit_gain_map(
+        frame,
+        mask,
+        order=order,
+        method=method,
+        subsample_step=2,
+        subsample_method="random",
+    )
+    assert res.shape == frame.shape

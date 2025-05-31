@@ -88,7 +88,8 @@ For a comprehensive description of each output file, refer to
 	•	Support for multi-gain and multi-exposure batch evaluation
 	•	PRNU and black-level correction logic
         •       `gain_map_mode` normalizes the gain map by its maximum for relative correction
-        •       `rbf_subsample` subsamples pixels before RBF fitting to reduce memory usage
+        •       `fit_subsample_step` controls pixel subsampling when fitting gain maps
+        •       `subsample_method` chooses `uniform` or `random` sampling
         •       `gain_fit_method` chooses `poly`, `rbf`, `akima`, or `hermite` fitting
         •       `gain_clip_margin` clips pixels outside margins before fitting
 	•	Optional Excel/Markdown export
