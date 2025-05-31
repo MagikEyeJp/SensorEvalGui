@@ -455,3 +455,29 @@ def test_fit_gain_map_subsample_random(method, order):
         subsample_method="random",
     )
     assert res.shape == frame.shape
+
+
+def test_calculate_dn_sat_clamp_full_scale():
+    stack = np.full((2, 2, 2), 65535, dtype=np.uint16)
+    cfg = {
+        "illumination": {"sat_factor": 0.95},
+        "sensor": {"adc_bits": 10, "lsb_shift": 6},
+    }
+    dn_sat = analysis.calculate_dn_sat(stack, cfg)
+    assert dn_sat == ((1 << 10) - 1) * (1 << 6)
+
+
+def test_calculate_dn_sat_uses_lsb_shift():
+    stack = np.full((1, 1, 1), 100, dtype=np.uint16)
+    cfg0 = {
+        "illumination": {"sat_factor": 0.95},
+        "sensor": {"adc_bits": 10, "lsb_shift": 0},
+    }
+    cfg6 = {
+        "illumination": {"sat_factor": 0.95},
+        "sensor": {"adc_bits": 10, "lsb_shift": 6},
+    }
+    dn_sat0 = analysis.calculate_dn_sat(stack, cfg0)
+    dn_sat6 = analysis.calculate_dn_sat(stack, cfg6)
+    assert dn_sat0 == pytest.approx(((1 << 10) - 1) * 0.95)
+    assert dn_sat6 == pytest.approx(((1 << 10) - 1) * (1 << 6) * 0.95)
