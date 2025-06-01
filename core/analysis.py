@@ -951,11 +951,19 @@ def calculate_dn_sat(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
         "sat_factor",
         cfg.get("reference", {}).get("sat_factor", 0.95),
     )
+
+    # Estimate full-scale from measured maximum and illumination factor
     max_from_factor = float(np.max(flat_stack)) / max(sat_factor, 1e-6)
+
     adc_bits = int(cfg.get("sensor", {}).get("adc_bits", 16))
-    adc_max = (1 << adc_bits) - 1
-    method3 = adc_max * 0.90
-    return max(p999, max_from_factor, method3)
+    lsb_shift = int(cfg.get("sensor", {}).get("lsb_shift", 0))
+    adc_full_scale = ((1 << adc_bits) - 1) * (1 << lsb_shift)
+
+    # Reference threshold based on the configured saturation factor
+    reference_thresh = adc_full_scale * sat_factor
+
+    dn_sat = max(p999, max_from_factor, reference_thresh)
+    return min(dn_sat, adc_full_scale)
 
 
 def calculate_dynamic_range_dn(dn_sat: float, read_noise: float) -> float:
