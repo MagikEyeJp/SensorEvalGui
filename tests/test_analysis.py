@@ -439,6 +439,20 @@ def test_fit_gain_map_subsample_uniform(method, order):
     assert res.shape == frame.shape
 
 
+def test_fit_gain_map_mask_respected():
+    pytest.importorskip("scipy")
+    frame = np.array(
+        [[10, 10, 10, 10], [10, 0, 0, 10], [10, 0, 0, 10], [10, 10, 10, 10]],
+        dtype=float,
+    )
+    mask = np.ones_like(frame, dtype=bool)
+    mask[1:3, 1:3] = False
+    res_a = analysis.fit_gain_map(frame, mask, order=0, method="akima")
+    res_h = analysis.fit_gain_map(frame, mask, order=0, method="hermite")
+    assert np.allclose(res_a, 1.0)
+    assert np.allclose(res_h, 1.0)
+
+
 @pytest.mark.parametrize("method,order", [("poly", 1), ("rbf", 0)])
 def test_fit_gain_map_subsample_random(method, order):
     if method == "rbf":
