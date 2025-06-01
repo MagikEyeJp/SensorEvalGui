@@ -148,36 +148,39 @@ def fit_gain_map_akima(
     subsample_step: int = 1,
     subsample_method: str = "uniform",
 ) -> np.ndarray:
-    """Return gain map using sequential Akima interpolation."""
+    """Return gain map using Akima-based interpolation respecting ``mask``."""
 
     try:
-        from scipy.interpolate import Akima1DInterpolator
+        from scipy.interpolate import griddata
     except Exception as exc:  # pragma: no cover - runtime dependency missing
         raise RuntimeError("scipy is required for Akima fitting") from exc
 
     step = max(int(subsample_step), 1)
-    y_full = np.arange(frame.shape[0])
-    x_full = np.arange(frame.shape[1])
-    frame_sub = frame[::step, ::step]
-    y_sub = y_full[::step]
-    x_sub = x_full[::step]
-    if y_sub[-1] != y_full[-1]:
-        y_sub = np.append(y_sub, y_full[-1])
-        frame_sub = np.vstack([frame_sub, frame[y_full[-1], ::step]])
-    if x_sub[-1] != x_full[-1]:
-        x_sub = np.append(x_sub, x_full[-1])
-        frame_sub = np.hstack([frame_sub, frame_sub[:, -1][:, None]])
-    if y_sub[-1] != y_full[-1]:
-        y_sub = np.append(y_sub, y_full[-1])
-        frame_sub = np.vstack([frame_sub, frame[y_full[-1], ::step]])
-    if x_sub[-1] != x_full[-1]:
-        x_sub = np.append(x_sub, x_full[-1])
-        frame_sub = np.hstack([frame_sub, frame_sub[:, -1][:, None]])
+    y_full, x_full = np.indices(frame.shape)
 
-    interp_x = Akima1DInterpolator(x_sub, frame_sub, axis=1)
-    temp = interp_x(x_full)
-    interp_y = Akima1DInterpolator(y_sub, temp, axis=0)
-    fitted = interp_y(y_full)
+    if step > 1:
+        if subsample_method == "uniform":
+            mask_sub = mask[::step, ::step]
+            frame_sub = frame[::step, ::step]
+            y_sub, x_sub = np.indices(frame_sub.shape)
+            pts = np.stack([y_sub[mask_sub] * step, x_sub[mask_sub] * step], axis=1)
+            vals = frame_sub[mask_sub].ravel()
+        else:
+            coords = np.argwhere(mask)
+            n = max(1, coords.shape[0] // (step**2))
+            idx = np.random.choice(coords.shape[0], n, replace=False)
+            pts = coords[idx]
+            vals = frame[pts[:, 0], pts[:, 1]]
+    else:
+        pts = np.argwhere(mask)
+        vals = frame[mask]
+
+    fitted = griddata(pts, vals, (y_full, x_full), method="cubic")
+    missing = np.isnan(fitted)
+    if np.any(missing):
+        fitted[missing] = griddata(
+            pts, vals, (y_full[missing], x_full[missing]), method="nearest"
+        )
 
     fitted = np.where(fitted == 0, 1e-6, fitted)
     gain_max = np.max(fitted[mask])
@@ -192,26 +195,39 @@ def fit_gain_map_hermite(
     subsample_step: int = 1,
     subsample_method: str = "uniform",
 ) -> np.ndarray:
-    """Return gain map using sequential Hermite interpolation."""
+    """Return gain map using Hermite-based interpolation respecting ``mask``."""
 
     try:
-        from scipy.interpolate import CubicHermiteSpline
+        from scipy.interpolate import griddata
     except Exception as exc:  # pragma: no cover - runtime dependency missing
         raise RuntimeError("scipy is required for Hermite fitting") from exc
 
     step = max(int(subsample_step), 1)
-    y_full = np.arange(frame.shape[0])
-    x_full = np.arange(frame.shape[1])
-    frame_sub = frame[::step, ::step]
-    y_sub = y_full[::step]
-    x_sub = x_full[::step]
+    y_full, x_full = np.indices(frame.shape)
 
-    dx = np.gradient(frame_sub, axis=1)
-    herm_x = CubicHermiteSpline(x_sub, frame_sub, dx, axis=1)
-    temp = herm_x(x_full)
-    dy = np.gradient(temp, axis=0)
-    herm_y = CubicHermiteSpline(y_sub, temp, dy, axis=0)
-    fitted = herm_y(y_full)
+    if step > 1:
+        if subsample_method == "uniform":
+            mask_sub = mask[::step, ::step]
+            frame_sub = frame[::step, ::step]
+            y_sub, x_sub = np.indices(frame_sub.shape)
+            pts = np.stack([y_sub[mask_sub] * step, x_sub[mask_sub] * step], axis=1)
+            vals = frame_sub[mask_sub].ravel()
+        else:
+            coords = np.argwhere(mask)
+            n = max(1, coords.shape[0] // (step**2))
+            idx = np.random.choice(coords.shape[0], n, replace=False)
+            pts = coords[idx]
+            vals = frame[pts[:, 0], pts[:, 1]]
+    else:
+        pts = np.argwhere(mask)
+        vals = frame[mask]
+
+    fitted = griddata(pts, vals, (y_full, x_full), method="cubic")
+    missing = np.isnan(fitted)
+    if np.any(missing):
+        fitted[missing] = griddata(
+            pts, vals, (y_full[missing], x_full[missing]), method="nearest"
+        )
 
     fitted = np.where(fitted == 0, 1e-6, fitted)
     gain_max = np.max(fitted[mask])
