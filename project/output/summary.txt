@@ -1,0 +1,24 @@
+Sensor: Sony IMX273
+Environment:
+  LED : 940 nm CW
+  Lens: LH2601A (IR-pass)
+  Temp: 25 °C
+Illumination: power_uW_cm2=67.92, exposure_ms=960
+Gains: 0 dB, 6 dB, 12 dB, 24 dB
+Exposures: 4.0, 2.0, 1.0, 0.5, 0.25, 0.125, 0.0625
+Date: 2025-06-03
+ADC Bits: 10
+LSB Shift: 6
+ADC Full Scale (DN): 65472
+
+Metric                0 dB       6 dB       12 dB      24 dB    
+Black level (DN)      2472.696   2472.012   2486.062   2512.444 
+DN @ 0 dB             3395.526   3372.037   3411.619   3431.852 
+DN @ 10 dB            3395.526   3372.037   3411.619   3431.852 
+DN_sat                63680.000  65280.000  65408.000  65408.000
+DSNU (DN)             31.883     34.357     40.394     95.720   
+Dynamic Range (dB)    65.862     62.667     59.614     52.255   
+Pseudo PRNU (%)       0.000      0.000      0.000      0.000    
+Read Noise (DN)       32.426     48.022     68.377     159.542  
+SNR @ 50% (dB)        37.966     35.026     32.129     26.105   
+System Sensitivity    941.842    1875.191   3698.989   14450.086

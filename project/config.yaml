@@ -1,0 +1,83 @@
+# Sensor Evaluation – default_config.yaml (Spec-complete)
+# *Sensor Output Spec* に準拠したデフォルト設定。プロジェクト固有の値は適宜書き換えてください。
+
+sensor:
+  name: Sony IMX273
+  adc_bits: 10          # ADC 分解能 [bit]
+  lsb_shift: 6          # デジタル LSB 右シフト量
+
+environment:
+  note: |
+    LED : 940 nm CW
+    Lens: LH2601A (IR-pass)
+    Temp: 25 °C
+
+measurement:
+  gains:                           # dB → sub‑folder
+    0:   { folder: gain_0dB }
+    6:   { folder: gain_6dB }
+    12:  { folder: gain_12dB }
+    24:  { folder: gain_24dB }
+  exposures:                       # ratio → sub‑folder
+    4.0:    { folder: chart_x4 }
+    2.0:    { folder: chart_x2 }
+    1.0:    { folder: chart_x1 }
+    0.5:    { folder: chart_x0.5 }
+    0.25:   { folder: chart_x0.25 }
+    0.125:  { folder: chart_x0.125 }
+    0.0625: { folder: chart_x0.0625 }
+  flat_lens_folder: LensFlat
+  flat_nolens_folder: flat
+  dark_folder: dark
+  flat_roi_file:  flat.roi
+  chart_roi_file: roi.zip
+  roi_mid_index: 5
+
+illumination:
+  power_uW_cm2: 67.92            # 入射光パワー
+  exposure_ms: 960               # 基準露光時間 [ms]
+  sat_factor: 0.95               # 飽和検出しきい値 (percentage)
+
+processing:
+  roi_zip_file: roi/chart_roi.zip  # Default ROI ZIP
+  stat_mode: rms                   # rms | mean | median
+  snr_threshold_dB: 10             # SNR threshold for DR
+  min_sig_factor: 3                # Guard: mean ≥ N×σ
+  mask_upper_margin: 1.00          # Use pixels < margin*DN_sat for fitting
+  mask_lower_margin: 0.3          # Use pixels >= margin*DN_sat for fitting
+  gain_map_mode: flat_frame          # self_fit | flat_fit | flat_frame | none
+  plane_fit_order: 4               # Polynomial order for plane fitting
+  gain_fit_method: poly            # poly | rbf | akima | hermite
+  fit_subsample_step: 1            # Pixel subsample step for gain fitting
+  subsample_method: uniform        # uniform | random sampling mode
+  gain_clip_margin: false         # Clip pixels to margins before fitting
+  read_noise_mode: 0               # 0: use std of stack, 1: use std of frame diff / √2
+  prnu_fit: LS                     # LS or WLS regression method
+  exclude_abnormal_snr: true       # Ignore low‑SNR patches
+
+plot:
+  # exposures: [4.0,2.0,1.0,0.5,0.25,0.125,0.0625]  # Override order if needed
+  color_by_exposure: false         # Optional UI key
+  exposure_labels: [3840,1920,960,480,240,120,60]
+  prnu_squared: false              # Plot μ² vs σ² if true
+
+output:
+  output_dir: output               # Root directory for results
+  report_html: true                # Generate HTML report
+  report_csv: true                 # Generate CSV file
+  report_summary: true             # Generate summary text
+  debug_stacks: false              # Save intermediate stack images
+  report_order:
+    - Dynamic Range (dB)
+    - SNR @ 50% (dB)
+    - DN @ 10 dB
+    - DN @ 0 dB
+    - Read Noise (DN)
+    - Black level (DN)
+    - DSNU (DN)
+    - DN_sat
+    - PRNU (%)
+    - System Sensitivity
+
+logging:
+  level: DEBUG                   # DEBUG | INFO | WARNING | ERROR | CRITICAL

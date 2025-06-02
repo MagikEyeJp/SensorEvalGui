@@ -1,0 +1,9 @@
+Dynamic Range (dB): 59.018
+DSNU (DN): 50.589
+Read Noise (DN): 77.092
+DN_sat: 68850.526
+Pseudo PRNU (%): 1.999
+System Sensitivity: 930.637
+DN @ 10 dB: 3471.437
+SNR @ 50% (dB): 9.989
+DN @ 0 dB: 3471.437
