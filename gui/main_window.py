@@ -185,8 +185,17 @@ def run_pipeline(
                 if status:
                     status(f"Loading flat frames for gain {gain_db:.1f} dB")
                 flat_stack = load_image_stack(flat_folder)
+                dn_sat_gain = calculate_dn_sat(
+                    flat_stack, cfg, snr_signal_data.get(gain_db)
+                )
                 gain_map_tmp = calculate_gain_map(
-                    flat_stack, cfg, flat_rects, project, gain_db
+                    flat_stack,
+                    cfg,
+                    flat_rects,
+                    project,
+                    gain_db,
+                    snr_signal=snr_signal_data.get(gain_db),
+                    dn_sat=dn_sat_gain,
                 )
                 if debug_stacks and first:
                     dark_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg[
@@ -200,7 +209,13 @@ def run_pipeline(
                         out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack
                     )
                 prnu, prnu_map_tmp = calculate_prnu_residual(
-                    flat_stack, cfg, flat_rects, project, gain_db
+                    flat_stack,
+                    cfg,
+                    flat_rects,
+                    project,
+                    gain_db,
+                    snr_signal=snr_signal_data.get(gain_db),
+                    dn_sat=dn_sat_gain,
                 )
                 gain_mult = cfgutil.gain_ratio(gain_db)
                 sens = calculate_system_sensitivity(
@@ -216,9 +231,7 @@ def run_pipeline(
                         prnu_map_tmp,
                         gain_map_tmp,
                     )
-                    dn_sat = calculate_dn_sat(
-                        flat_stack, cfg, snr_signal_data.get(gain_db)
-                    )
+                    dn_sat = dn_sat_gain
                     first = False
 
                 # SNR metrics for this gain
