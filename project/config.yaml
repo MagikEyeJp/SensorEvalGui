@@ -67,6 +67,7 @@ output:
   report_csv: true                 # Generate CSV file
   report_summary: true             # Generate summary text
   debug_stacks: false              # Save intermediate stack images
+  snr_signal_data: true           # Save SNR-Signal curve data
   report_order:
     - Dynamic Range (dB)
     - SNR @ 50% (dB)
