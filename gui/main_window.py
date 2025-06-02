@@ -248,20 +248,20 @@ def run_pipeline(
                         snr_lin_g,
                         cfg["processing"].get("snr_threshold_dB", 10.0),
                     )
-                    snr_at_50_g = calculate_snr_at_half(sig_g, snr_lin_g, dn_sat)
+                    snr_at_50_g = calculate_snr_at_half(sig_g, snr_lin_g, dn_sat_gain)
                     dn_at_0_g = calculate_dn_at_snr_one(sig_g, snr_lin_g)
                 else:
                     dn_at_10_g = float("nan")
                     snr_at_50_g = float("nan")
                     dn_at_0_g = float("nan")
 
-                dyn_range_g = calculate_dynamic_range_dn(dn_sat, rn)
+                dyn_range_g = calculate_dynamic_range_dn(dn_sat_gain, rn)
                 per_gain[gain_db] = {
                     "Dynamic Range (dB)": dyn_range_g,
                     "DSNU (DN)": dsnu,
                     "Read Noise (DN)": rn,
                     "Black level (DN)": black_level,
-                    "DN_sat": dn_sat,
+                    "DN_sat": dn_sat_gain,
                     "Pseudo PRNU (%)": prnu,
                     "System Sensitivity": sens,
                     "DN @ 10 dB": dn_at_10_g,
