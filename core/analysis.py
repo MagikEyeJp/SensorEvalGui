@@ -1002,6 +1002,15 @@ def _estimate_sat_from_snr(signal: np.ndarray, snr: np.ndarray) -> float:
         np.array2string(s, precision=3, threshold=10),
     )
 
+    diffs = np.diff(sig)
+    close_idx = np.where(np.abs(diffs) < 1.0)[0]
+    if close_idx.size > 0:
+        logging.debug(
+            "_estimate_sat_from_snr: close signal points at idx %s -> diffs=%s",
+            close_idx.tolist(),
+            np.array2string(diffs[close_idx], precision=3, threshold=10),
+        )
+
     if sig.size >= 4:
         spline = UnivariateSpline(sig, s, s=0.2, k=3)
         d2 = spline.derivative(2)(sig)
