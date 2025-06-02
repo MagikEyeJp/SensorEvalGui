@@ -72,7 +72,12 @@ from core.plotting import (
     plot_roi_area,
 )
 from utils.roi import load_rois
-from core.report_gen import save_summary_txt, report_csv, report_html
+from core.report_gen import (
+    save_summary_txt,
+    report_csv,
+    report_html,
+    save_snr_signal_json,
+)
 from core.loader import load_image_stack, load_first_frame
 from typing import Callable, Optional
 
@@ -333,6 +338,7 @@ def run_pipeline(
                     * (1 << int(cfg.get("sensor", {}).get("lsb_shift", 0)))
                 ),
             )
+            save_snr_signal_json(sig_data, cfg, out_dir / "snr_signal.json")
             log_memory_usage("after snr_signal plot: ")
 
             logging.info("Plotting SNR vs Exposure")
