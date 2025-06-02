@@ -321,7 +321,11 @@ def run_pipeline(
             logging.info("Plotting SNR vs Signal (multi)")
             log_memory_usage("before snr_signal plot: ")
             fig_snr_signal = plot_snr_vs_signal_multi(
-                sig_data, cfg, out_dir / "snr_signal.png", return_fig=True
+                sig_data,
+                cfg,
+                out_dir / "snr_signal.png",
+                return_fig=True,
+                show_derivative=True,
             )
             log_memory_usage("after snr_signal plot: ")
 
