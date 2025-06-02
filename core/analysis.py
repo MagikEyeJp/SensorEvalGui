@@ -779,9 +779,11 @@ def collect_gain_snr_signal(
         Mapping of gain to arrays of signal levels and linear SNR values.
     """
 
-    snr_thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
-    min_sig_factor = cfg.get("processing", {}).get("min_sig_factor", 3.0)
-    excl_low = cfg.get("processing", {}).get("exclude_abnormal_snr", True)
+    # Filtering parameters are read for backward compatibility but are not used
+    # because all ROI points should contribute to the SNR–Signal plot.
+    _ = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
+    _ = cfg.get("processing", {}).get("min_sig_factor", 3.0)
+    _ = cfg.get("processing", {}).get("exclude_abnormal_snr", True)
 
     data: Dict[float, list[tuple[float, float]]] = {}
     for row in rows:
@@ -789,13 +791,9 @@ def collect_gain_snr_signal(
         std = float(row.get("Std", 0.0))
         if std == 0:
             continue
-        if mean < min_sig_factor * std:
-            continue
         gain = float(row.get("Gain (dB)", 0.0))
         black = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
         snr = (mean - black) / std
-        if excl_low and 20 * np.log10(snr) < snr_thresh:
-            continue
         data.setdefault(gain, []).append((mean, snr))
 
     res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
@@ -1572,14 +1570,8 @@ def fit_clipped_snr_model(
     signal = signal[mask]
     snr = snr[mask]
 
-    if snr.size >= 5:
-        med = float(np.median(snr))
-        mad = float(np.median(np.abs(snr - med)))
-        if mad > 0:
-            thresh = med + 6.0 * mad
-            inlier = snr <= thresh
-            signal = signal[inlier]
-            snr = snr[inlier]
+    # Avoid discarding high-SNR points. They may indicate clipped noise rather
+    # than measurement errors, so include all finite samples in the fit.
 
     def _model(x: np.ndarray, r: float) -> np.ndarray:
         return clipped_snr_model(x, r, adc_full_scale, black_level)
