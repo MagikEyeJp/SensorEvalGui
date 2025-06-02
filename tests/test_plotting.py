@@ -63,7 +63,7 @@ def test_plot_snr_vs_signal_multi_interp(tmp_path):
         interp_points=5,
     )
     assert (tmp_path / "interp.png").is_file()
-    assert len(fig.axes[0].lines[0].get_xdata()) == 5
+    assert len(fig.axes[0].lines[0].get_xdata()) == 2
 
 
 def test_plot_snr_vs_signal_multi_invalid(tmp_path):

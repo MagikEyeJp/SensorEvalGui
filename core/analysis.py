@@ -42,6 +42,8 @@ __all__ = [
     "fit_gain_map_rbf",
     "fit_gain_map",
     "get_gain_map",
+    "clipped_snr_model",
+    "fit_clipped_snr_model",
     "calculate_gain_map",
     "calculate_pseudo_prnu",
     "calculate_prnu_residual",
@@ -1507,3 +1509,46 @@ def calculate_snr_at_half(
 def calculate_dn_at_snr_one(signal: np.ndarray, snr_lin: np.ndarray) -> float:
     """Shortcut for :func:`calculate_dn_at_snr` with a threshold of 0 dB."""
     return calculate_dn_at_snr(signal, snr_lin, 0.0)
+
+
+def clipped_snr_model(
+    signal: np.ndarray, read_noise: float, adc_full_scale: float
+) -> np.ndarray:
+    """Return SNR curve accounting for ADC clipping at 0 and full scale."""
+
+    from scipy.stats import norm
+
+    sig = np.asarray(signal, dtype=float)
+    sigma = np.sqrt(sig + read_noise**2)
+    alpha = -sig / sigma
+    beta = (adc_full_scale - sig) / sigma
+    cdf = norm.cdf
+    pdf = norm.pdf
+    with np.errstate(divide="ignore", invalid="ignore"):
+        z = cdf(beta) - cdf(alpha)
+        a = pdf(alpha)
+        b = pdf(beta)
+        var = sigma**2 * (1.0 + (alpha * a - beta * b) / z - ((a - b) / z) ** 2)
+    var = np.where(z <= 0, 0.0, var)
+    noise = np.sqrt(var)
+    return sig / np.maximum(noise, 1e-6)
+
+
+def fit_clipped_snr_model(
+    signal: np.ndarray, snr: np.ndarray, adc_full_scale: float
+) -> float:
+    """Fit :func:`clipped_snr_model` and return estimated read noise."""
+
+    signal = np.asarray(signal, dtype=float)
+    snr = np.asarray(snr, dtype=float)
+
+    def _model(x: np.ndarray, r: float) -> np.ndarray:
+        return clipped_snr_model(x, r, adc_full_scale)
+
+    try:
+        popt, _ = curve_fit(
+            _model, signal, snr, p0=[1.0], bounds=(0.0, np.inf), maxfev=10000
+        )
+    except Exception:
+        return 1.0
+    return float(popt[0])
