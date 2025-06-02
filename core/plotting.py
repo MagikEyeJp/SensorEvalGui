@@ -62,21 +62,40 @@ def _smooth_and_second_derivative(
     idx = np.argsort(signal)
     sig = np.asarray(signal, dtype=float)[idx]
     s = np.asarray(snr, dtype=float)[idx]
+    logging.debug(
+        "_smooth_and_second_derivative: sorted signal=%s",
+        np.array2string(sig, precision=3, threshold=10),
+    )
+    logging.debug(
+        "_smooth_and_second_derivative: sorted snr=%s",
+        np.array2string(s, precision=3, threshold=10),
+    )
 
     if interp_points is not None and interp_points > sig.size:
         xs = np.linspace(float(sig.min()), float(sig.max()), int(interp_points))
         ys = np.interp(xs, sig, s)
         sig = xs
         s = ys
+        logging.debug(
+            "_smooth_and_second_derivative: interpolated to %d points", len(sig)
+        )
 
     if sig.size >= 4:
         spline = UnivariateSpline(sig, s, s=0.2, k=min(poly + 1, 5))
         s_smooth = spline(sig)
         d2 = spline.derivative(2)(sig)
+        logging.debug(
+            "_smooth_and_second_derivative: second derivative=%s",
+            np.array2string(d2, precision=3, threshold=10),
+        )
     else:
         s_smooth = s
         d1 = np.gradient(s_smooth, sig)
         d2 = np.gradient(d1, sig)
+        logging.debug(
+            "_smooth_and_second_derivative: second derivative (grad)=%s",
+            np.array2string(d2, precision=3, threshold=10),
+        )
 
     return sig, s_smooth, d2
 

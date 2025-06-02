@@ -993,19 +993,42 @@ def _estimate_sat_from_snr(signal: np.ndarray, snr: np.ndarray) -> float:
     idx = np.argsort(signal)
     sig = np.asarray(signal, dtype=float)[idx]
     s = np.asarray(snr, dtype=float)[idx]
+    logging.debug(
+        "_estimate_sat_from_snr: sorted signal=%s",
+        np.array2string(sig, precision=3, threshold=10),
+    )
+    logging.debug(
+        "_estimate_sat_from_snr: sorted snr=%s",
+        np.array2string(s, precision=3, threshold=10),
+    )
 
     if sig.size >= 4:
         spline = UnivariateSpline(sig, s, s=0.2, k=3)
         d2 = spline.derivative(2)(sig)
+        logging.debug(
+            "_estimate_sat_from_snr: second derivative=%s",
+            np.array2string(d2, precision=3, threshold=10),
+        )
     else:
         d1 = np.gradient(s, sig)
         d2 = np.gradient(d1, sig)
+        logging.debug(
+            "_estimate_sat_from_snr: second derivative (grad)=%s",
+            np.array2string(d2, precision=3, threshold=10),
+        )
 
     max_val = np.max(d2)
     idxs = np.where(np.isclose(d2, max_val, rtol=1e-6, atol=0.0))[0]
     if idxs.size == 0:
+        logging.debug("_estimate_sat_from_snr: no maxima found")
         return float("nan")
     pos = sig[int(idxs[-1])]
+    logging.debug(
+        "_estimate_sat_from_snr: max d2 at index %d -> pos=%.3f val=%.3f",
+        int(idxs[-1]),
+        pos,
+        max_val,
+    )
     return float(pos)
 
 
