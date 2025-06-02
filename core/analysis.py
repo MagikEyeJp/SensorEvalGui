@@ -1009,18 +1009,22 @@ def calculate_dn_sat(
         Detected saturation DN value.
     """
     p999 = float(np.percentile(flat_stack, 99.9))
+    logging.debug("calculate_dn_sat: p999=%.3f", p999)
 
     if snr_signal is not None:
         sig, snr = snr_signal
         est = _estimate_sat_from_snr(np.asarray(sig), np.asarray(snr))
+        logging.debug("calculate_dn_sat: snr_est=%.3f", est)
     else:
         est = float("nan")
+        logging.debug("calculate_dn_sat: snr_signal not provided")
 
     if not np.isfinite(est):
         mean_frame = np.mean(flat_stack, axis=0)
         flat_sorted = np.sort(mean_frame.ravel())
         count = max(1, int(flat_sorted.size * 0.01))
         est = float(np.mean(flat_sorted[-count:]))
+        logging.debug("calculate_dn_sat: fallback_est=%.3f", est)
     sat_factor = cfg.get("illumination", {}).get(
         "sat_factor",
         cfg.get("reference", {}).get("sat_factor", 0.95),
@@ -1033,8 +1037,24 @@ def calculate_dn_sat(
     # Reference threshold based on the configured saturation factor
     reference_thresh = adc_full_scale * sat_factor
 
+    logging.debug(
+        "calculate_dn_sat: sat_factor=%.3f adc_full_scale=%d reference_thresh=%.3f",
+        sat_factor,
+        adc_full_scale,
+        reference_thresh,
+    )
+
     dn_sat = max(est, p999, reference_thresh)
-    return min(dn_sat, adc_full_scale)
+    dn_sat_final = min(dn_sat, adc_full_scale)
+    logging.debug(
+        "calculate_dn_sat: chosen=max(est=%.3f, p999=%.3f, ref=%.3f)=%.3f -> %.3f",
+        est,
+        p999,
+        reference_thresh,
+        dn_sat,
+        dn_sat_final,
+    )
+    return dn_sat_final
 
 
 def calculate_dynamic_range_dn(dn_sat: float, read_noise: float) -> float:
