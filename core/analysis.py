@@ -1553,6 +1553,19 @@ def fit_clipped_snr_model(
     signal = np.asarray(signal, dtype=float)
     snr = np.asarray(snr, dtype=float)
 
+    mask = np.isfinite(signal) & np.isfinite(snr)
+    signal = signal[mask]
+    snr = snr[mask]
+
+    if snr.size >= 5:
+        med = float(np.median(snr))
+        mad = float(np.median(np.abs(snr - med)))
+        if mad > 0:
+            thresh = med + 6.0 * mad
+            inlier = snr <= thresh
+            signal = signal[inlier]
+            snr = snr[inlier]
+
     def _model(x: np.ndarray, r: float) -> np.ndarray:
         return clipped_snr_model(x, r, adc_full_scale, black_level)
 
