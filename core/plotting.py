@@ -150,14 +150,12 @@ def plot_snr_vs_signal_multi(
             sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
             snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
         all_signals.append(sig)
-
         sig_orig = sig
         snr_orig = snr
         if interp_points is not None and interp_points > sig.size:
             xs = np.linspace(float(sig.min()), float(sig.max()), int(interp_points))
             snr = np.interp(xs, sig, snr)
             sig = xs
-
         snr_db = 20 * np.log10(snr)
         lines = ax_snr.loglog(sig, snr_db, linestyle="-", label=f"{gain:g}dB")
         color = lines[0].get_color()
@@ -251,6 +249,18 @@ def plot_snr_vs_exposure(
             marker="s",
             linestyle="-",
             label=f"{gain:g} dB",
+        )
+        base_idx = int(np.argmin(np.abs(ratios - 1.0)))
+        base_ratio = ratios[base_idx]
+        base_snr = snr[base_idx]
+        ideal = base_snr * np.sqrt(ratios / base_ratio)
+        ideal_db = 20 * np.log10(ideal)
+        plt.semilogx(
+            times,
+            ideal_db,
+            linestyle="--",
+            color="k",
+            label=f"{gain:g} dB Ideal √k",
         )
     plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
     plt.xticks(xticks, label_strs, rotation=45)
