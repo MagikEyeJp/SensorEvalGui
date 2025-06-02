@@ -216,6 +216,18 @@ def plot_snr_vs_exposure(
             linestyle="-",
             label=f"{gain:g} dB",
         )
+        base_idx = int(np.argmin(np.abs(ratios - 1.0)))
+        base_ratio = ratios[base_idx]
+        base_snr = snr[base_idx]
+        ideal = base_snr * np.sqrt(ratios / base_ratio)
+        ideal_db = 20 * np.log10(ideal)
+        plt.semilogx(
+            times,
+            ideal_db,
+            linestyle="--",
+            color="k",
+            label=f"{gain:g} dB Ideal √k",
+        )
     plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
     plt.xticks(xticks, label_strs, rotation=45)
     plt.xlabel("Exposure Time (ms)")
