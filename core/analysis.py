@@ -947,7 +947,53 @@ def calculate_dark_noise_gain(
     return dsnu, read_noise, dsnu_map, read_noise_map, black_level
 
 
-def calculate_dn_sat(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
+def _estimate_sat_from_snr(signal: np.ndarray, snr: np.ndarray) -> float:
+    """Return DN level where the SNR curve drops sharply.
+
+    The function smooths the SNR values with a small moving average window,
+    computes the second derivative, and locates the point with the maximum
+    change starting from the highest signal level.
+
+    Parameters
+    ----------
+    signal:
+        Signal levels sorted in ascending order.
+    snr:
+        Corresponding linear SNR values.
+
+    Returns
+    -------
+    float
+        Estimated DN value where the curve bends. ``NaN`` on failure.
+    """
+
+    if signal.size < 3 or snr.size != signal.size:
+        return float("nan")
+
+    idx = np.argsort(signal)
+    sig = np.asarray(signal, dtype=float)[idx]
+    s = np.asarray(snr, dtype=float)[idx]
+
+    win = 3 if sig.size >= 3 else sig.size
+    if win > 1:
+        kernel = np.ones(win) / win
+        s = np.convolve(s, kernel, mode="same")
+
+    d1 = np.gradient(s, sig)
+    d2 = np.gradient(d1, sig)
+
+    rev_idx = np.argmax(d2[::-1])
+    if not np.isfinite(rev_idx):
+        return float("nan")
+    pos = sig[len(sig) - 1 - rev_idx]
+    return float(pos)
+
+
+def calculate_dn_sat(
+    flat_stack: np.ndarray,
+    cfg: Dict[str, Any],
+    snr_signal: tuple[np.ndarray, np.ndarray] | None = None,
+) -> float:
     """Estimate the sensor saturation level in DN.
 
     Parameters
@@ -963,6 +1009,18 @@ def calculate_dn_sat(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
         Detected saturation DN value.
     """
     p999 = float(np.percentile(flat_stack, 99.9))
+
+    if snr_signal is not None:
+        sig, snr = snr_signal
+        est = _estimate_sat_from_snr(np.asarray(sig), np.asarray(snr))
+    else:
+        est = float("nan")
+
+    if not np.isfinite(est):
+        mean_frame = np.mean(flat_stack, axis=0)
+        flat_sorted = np.sort(mean_frame.ravel())
+        count = max(1, int(flat_sorted.size * 0.01))
+        est = float(np.mean(flat_sorted[-count:]))
     sat_factor = cfg.get("illumination", {}).get(
         "sat_factor",
         cfg.get("reference", {}).get("sat_factor", 0.95),
@@ -978,7 +1036,7 @@ def calculate_dn_sat(flat_stack: np.ndarray, cfg: Dict[str, Any]) -> float:
     # Reference threshold based on the configured saturation factor
     reference_thresh = adc_full_scale * sat_factor
 
-    dn_sat = max(p999, max_from_factor, reference_thresh)
+    dn_sat = max(est, p999, max_from_factor, reference_thresh)
     return min(dn_sat, adc_full_scale)
 
 

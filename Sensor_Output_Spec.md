@@ -63,13 +63,11 @@ Gainごとに下記項目を出力
   * 使用モード：config.processing.read\_noise\_mode
     * 0：スタック全体の標準偏差から計算（デフォルト）
     * 1：フレーム間差分の標準偏差を √2 で割って計算
-* **DN_sat (飽和DN)**：以下3方式の最大値を採用し、結果は ADC Full Scale DN でクランプする：
-
-  1. フラット画像ROIの最大輝度ドットの 99.9 パーセンタイル値
-  2. フラット画像の最大値を `config.illumination.sat_factor` で割った値
-  3. `ADC_FullScaleDN` × `config.reference.sat_factor`
-
-  `ADC_FullScaleDN` は `(1 << adc_bits) - 1` に `1 << lsb_shift` を乗じた値で定義する。
+* **DN_sat (飽和DN)**：SNR‑Signal 曲線を平滑化し、最大信号側から二次微分が最大となる
+  DN を膝点として求める。計算に失敗した場合は 1x フラット画像の上位 1 % 平均 DN を
+  代わりに用いる。さらに `config.illumination.sat_factor` と `config.reference.sat_factor`
+  から得られるしきい値と比較して最大値を採用し、結果を `ADC_FullScaleDN` でクランプ
+  する。`ADC_FullScaleDN` は `(1 << adc_bits) - 1` に `1 << lsb_shift` を乗じた値とする。
 * **Dynamic Range (dB)**：最大信号値として DN\_sat を用い、Read Noise (DN) との比から 20\*log10(DN\_sat / Noise) を算出。
 * **SNR @ 50%**：グレースケールチャートまたはフラット画像で、Full-Wellの50%（例：32768 DN）に最も近いμとSNRの系列から、補間または回帰により推定して算出。
   * DN\_satの基準：config.reference.sat\_factor
