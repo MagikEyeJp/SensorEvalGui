@@ -269,7 +269,7 @@ def fit_gain_map(
     np.ndarray
         Fitted gain map matching ``frame`` shape.
     """
-    logging.debug(
+    logging.info(
         "Fitting gain map: method=%s order=%d mask_pixels=%d",
         method,
         order,
@@ -338,7 +338,7 @@ def fit_gain_map(
         A_full = np.stack(cols_full, axis=0)
         fitted = np.tensordot(coef, A_full, axes=(0, 0))
 
-    logging.debug(
+    logging.info(
         "Gain map pre-normalization: min=%.3g max=%.3g",
         fitted[mask].min(),
         fitted[mask].max(),
@@ -347,7 +347,7 @@ def fit_gain_map(
     fitted = np.where(fitted == 0, 1e-6, fitted)
     gain_max = np.max(fitted[mask])
     fitted /= max(gain_max, 1e-6)
-    logging.debug(
+    logging.info(
         "Gain map normalized: gain_max=%.3g min=%.3g max=%.3g",
         gain_max,
         fitted.min(),
@@ -398,12 +398,12 @@ def get_gain_map(
 
     mode = cfg.get("processing", {}).get("gain_map_mode", "none")
     if mode == "none":
-        logging.debug("Gain map mode is 'none'")
+        logging.info("Gain map mode is 'none'")
         return None
 
     order = int(cfg.get("processing", {}).get("plane_fit_order", 0))
     method = cfg.get("processing", {}).get("gain_fit_method", "poly")
-    logging.debug(
+    logging.info(
         "get_gain_map: mode=%s method=%s order=%d stack_provided=%s",
         mode,
         method,
@@ -415,7 +415,7 @@ def get_gain_map(
         if stack is None:
             raise ValueError("stack is required for self_fit gain map")
         mean_src = np.mean(stack, axis=0)
-        logging.debug(
+        logging.info(
             "Using provided stack for gain map; mean=%.3g min=%.3g max=%.3g",
             float(np.mean(mean_src)),
             float(np.min(mean_src)),
@@ -428,7 +428,7 @@ def get_gain_map(
             ].get("flat_lens_folder", "LensFlat")
             stack = load_image_stack(flat_folder)
             mean_src = np.mean(stack, axis=0)
-            logging.debug(
+            logging.info(
                 "Loaded reference flat stack from %s; mean=%.3g min=%.3g max=%.3g",
                 flat_folder,
                 float(np.mean(mean_src)),
@@ -437,7 +437,7 @@ def get_gain_map(
             )
         else:
             mean_src = np.mean(stack, axis=0)
-            logging.debug(
+            logging.info(
                 "Using provided flat stack; mean=%.3g min=%.3g max=%.3g",
                 float(np.mean(mean_src)),
                 float(np.min(mean_src)),
@@ -467,7 +467,7 @@ def get_gain_map(
         gain_map = np.where(gain_map == 0, 1e-6, gain_map)
         gain_max = np.max(gain_map[mask])
         gain_map /= max(gain_max, 1e-6)
-        logging.debug(
+        logging.info(
             "Flat frame mode: gain_max=%.3g min=%.3g max=%.3g",
             gain_max,
             float(np.min(gain_map)),
@@ -485,13 +485,13 @@ def get_gain_map(
             subsample_step=subsample,
             subsample_method=subsample_method_cfg,
         )
-        logging.debug(
+        logging.info(
             "Fit gain map result: min=%.3g max=%.3g",
             float(np.min(gain_map)),
             float(np.max(gain_map)),
         )
 
-    logging.debug(
+    logging.info(
         "Gain map returned: mean=%.3g min=%.3g max=%.3g",
         float(np.mean(gain_map)),
         float(np.min(gain_map)),
@@ -1028,22 +1028,22 @@ def calculate_dn_sat(
         Detected saturation DN value.
     """
     p999 = float(np.percentile(flat_stack, 99.9))
-    logging.debug("calculate_dn_sat: p999=%.3f", p999)
+    logging.info("calculate_dn_sat: p999=%.3f", p999)
 
     if snr_signal is not None:
         sig, snr = snr_signal
         est = _estimate_sat_from_snr(np.asarray(sig), np.asarray(snr))
-        logging.debug("calculate_dn_sat: snr_est=%.3f", est)
+        logging.info("calculate_dn_sat: snr_est=%.3f", est)
     else:
         est = float("nan")
-        logging.debug("calculate_dn_sat: snr_signal not provided")
+        logging.info("calculate_dn_sat: snr_signal not provided")
 
     if not np.isfinite(est):
         mean_frame = np.mean(flat_stack, axis=0)
         flat_sorted = np.sort(mean_frame.ravel())
         count = max(1, int(flat_sorted.size * 0.01))
         est = float(np.mean(flat_sorted[-count:]))
-        logging.debug("calculate_dn_sat: fallback_est=%.3f", est)
+        logging.info("calculate_dn_sat: fallback_est=%.3f", est)
     sat_factor = cfg.get("illumination", {}).get(
         "sat_factor",
         cfg.get("reference", {}).get("sat_factor", 0.95),
@@ -1056,7 +1056,7 @@ def calculate_dn_sat(
     # Reference threshold based on the configured saturation factor
     reference_thresh = adc_full_scale * sat_factor
 
-    logging.debug(
+    logging.info(
         "calculate_dn_sat: sat_factor=%.3f adc_full_scale=%d reference_thresh=%.3f",
         sat_factor,
         adc_full_scale,
@@ -1065,7 +1065,7 @@ def calculate_dn_sat(
 
     dn_sat = max(est, p999, reference_thresh)
     dn_sat_final = min(dn_sat, adc_full_scale)
-    logging.debug(
+    logging.info(
         "calculate_dn_sat: chosen=max(est=%.3f, p999=%.3f, ref=%.3f)=%.3f -> %.3f",
         est,
         p999,
@@ -1143,7 +1143,7 @@ def calculate_pseudo_prnu(
             dn_sat_val = calculate_dn_sat(flat_stack, cfg, snr_signal)
         mask &= mean_frame <= margin * dn_sat_val
 
-    logging.debug(
+    logging.info(
         "PRNU residual: initial mean=%.3g min=%.3g max=%.3g",
         float(np.mean(mean_frame)),
         float(np.min(mean_frame)),
@@ -1269,7 +1269,7 @@ def calculate_prnu_residual(
     if gain_map is not None:
         corrected = flat_stack / gain_map
         mean_frame = np.mean(corrected, axis=0)
-        logging.debug(
+        logging.info(
             "Corrected frame: mean=%.3g min=%.3g max=%.3g",
             float(np.mean(mean_frame)),
             float(np.min(mean_frame)),
@@ -1279,7 +1279,7 @@ def calculate_prnu_residual(
     roi_mean = float(np.mean(mean_frame[mask]))
     residual_map = mean_frame - roi_mean
 
-    logging.debug(
+    logging.info(
         "Residual map: roi_mean=%.3g min=%.3g max=%.3g",
         roi_mean,
         float(np.min(residual_map)),
