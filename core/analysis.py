@@ -1018,8 +1018,43 @@ def _estimate_sat_from_snr(signal: np.ndarray, snr: np.ndarray) -> float:
             np.array2string(diffs[close_idx], precision=3, threshold=10),
         )
 
+        # merge consecutive points closer than 1 DN by averaging
+        merged_sig = []
+        merged_s = []
+        i = 0
+        while i < sig.size:
+            j = i + 1
+            while j < sig.size and abs(sig[j] - sig[j - 1]) < 1.0:
+                j += 1
+            if j - i > 1:
+                merged_sig.append(float(np.mean(sig[i:j])))
+                merged_s.append(float(np.mean(s[i:j])))
+            else:
+                merged_sig.append(float(sig[i]))
+                merged_s.append(float(s[i]))
+            i = j
+        sig = np.asarray(merged_sig)
+        s = np.asarray(merged_s)
+
+    # remove any remaining duplicates exactly equal
+    uniq_sig, inv_idx = np.unique(sig, return_inverse=True)
+    if uniq_sig.size != sig.size:
+        uniq_s = [float(np.mean(s[inv_idx == i])) for i in range(uniq_sig.size)]
+        sig = uniq_sig
+        s = np.asarray(uniq_s)
+
     if sig.size >= 4:
-        spline = UnivariateSpline(sig, s, s=0.2, k=3)
+        s_val = 0.2
+        try:
+            spline = UnivariateSpline(sig, s, s=s_val, k=3)
+        except Exception as exc:  # pragma: no cover - should not normally fail
+            s_val = float(sig.size) * 0.1
+            logging.debug(
+                "_estimate_sat_from_snr: spline retry with s=%.3f due to %s",
+                s_val,
+                exc,
+            )
+            spline = UnivariateSpline(sig, s, s=s_val, k=3)
         d2 = spline.derivative(2)(sig)
         logging.debug(
             "_estimate_sat_from_snr: second derivative=%s",
