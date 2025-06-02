@@ -5,6 +5,8 @@ import importlib
 
 import pytest
 
+from pathlib import Path
+
 pytest.importorskip("numpy")
 pytest.importorskip("tifffile")
 
@@ -504,3 +506,13 @@ def test_calculate_dn_sat_with_snr_signal():
     snr = np.array([1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1], dtype=float)
     dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, snr))
     assert dn_sat == pytest.approx(80.0)
+
+
+def test_clear_cache_resets_internal_caches():
+    analysis._stack_cache[Path("a")] = np.zeros((1, 1))
+    analysis._stats_cache[(Path("b"), 0.0, 1.0, False)] = {"mean": 1.0}
+    assert analysis._stack_cache
+    assert analysis._stats_cache
+    analysis.clear_cache()
+    assert not analysis._stack_cache
+    assert not analysis._stats_cache

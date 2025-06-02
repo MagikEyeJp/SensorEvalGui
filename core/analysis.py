@@ -19,6 +19,7 @@ from utils.roi import load_rois
 from core.loader import load_image_stack
 
 __all__ = [
+    "clear_cache",
     "extract_roi_stats",
     "extract_roi_stats_gainmap",
     "extract_roi_table",
@@ -52,6 +53,12 @@ __all__ = [
 # multiple times during a single session.
 _stack_cache: Dict[Path, np.ndarray] = {}
 _stats_cache: Dict[tuple[Path, float, float, bool], Dict[str, float]] = {}
+
+
+def clear_cache() -> None:
+    """Empty cached image stacks and ROI statistics."""
+    _stack_cache.clear()
+    _stats_cache.clear()
 
 
 def _load_stack_cached(folder: Path) -> np.ndarray:

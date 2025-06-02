@@ -62,6 +62,7 @@ from core.analysis import (
     calculate_dn_at_snr_one,
     calculate_prnu_residual,
     calculate_gain_map,
+    clear_cache,
 )
 from core.plotting import (
     plot_snr_vs_signal_multi,
@@ -114,6 +115,7 @@ def run_pipeline(
     status: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, float]:
     """Run full analysis pipeline with logging and memory checks."""
+    clear_cache()
     apply_logging_config(cfg)
     logging.info("Pipeline start: %s", project)
     with pipeline_lock:
