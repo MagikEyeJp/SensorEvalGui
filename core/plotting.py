@@ -16,6 +16,7 @@ import numpy as np
 from utils.logger import log_memory_usage
 from scipy.interpolate import UnivariateSpline
 from scipy.optimize import curve_fit
+from core import analysis
 
 from utils import config as cfgutil
 
@@ -211,6 +212,10 @@ def plot_snr_vs_signal_multi(
     else:
         fig, ax_snr = plt.subplots()
 
+    adc_bits = int(cfg.get("sensor", {}).get("adc_bits", 16))
+    lsb_shift = int(cfg.get("sensor", {}).get("lsb_shift", 0))
+    adc_full_scale = ((1 << adc_bits) - 1) * (1 << lsb_shift)
+
     all_signals = []
     for gain, (sig, snr) in sorted(data.items()):
         logging.debug(
@@ -222,36 +227,28 @@ def plot_snr_vs_signal_multi(
             sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
             snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
         all_signals.append(sig)
-        sig_orig = sig
-        snr_orig = snr
-        if interp_points is not None and interp_points > sig.size:
-            xs = np.linspace(float(sig.min()), float(sig.max()), int(interp_points))
-            snr = np.interp(xs, sig, snr)
-            sig = xs
-        snr_db = 20 * np.log10(snr)
-        lines = ax_snr.loglog(sig, snr_db, linestyle="-", label=f"{gain:g}dB")
-        color = lines[0].get_color()
+        color = next(ax_snr._get_lines.prop_cycler)["color"]
         ax_snr.loglog(
-            sig_orig,
-            20 * np.log10(snr_orig),
+            sig,
+            20 * np.log10(snr),
             linestyle="None",
             marker="o",
             color=color,
-            label="_nolegend_",
+            label=f"{gain:g}dB",
         )
 
-        sig_s, snr_smooth, d2 = _smooth_and_second_derivative(
-            sig_orig, snr_orig, interp_points=interp_points, use_logistic=True
-        )
+        rn = analysis.fit_clipped_snr_model(sig, snr, adc_full_scale)
+        xs = np.linspace(float(sig.min()), float(sig.max()), 200)
+        snr_fit = analysis.clipped_snr_model(xs, rn, adc_full_scale)
         ax_snr.loglog(
-            sig_s,
-            20 * np.log10(snr_smooth),
-            linestyle="--",
-            color=color,
+            xs, 20 * np.log10(snr_fit), linestyle="-", color=color, label="_nolegend_"
         )
+
         if show_derivative:
+            d1 = np.gradient(snr_fit, xs)
+            d2 = np.gradient(d1, xs)
             ax_d2.semilogx(
-                sig_s, d2, marker=".", linestyle="-", color=color, label=f"{gain:g}dB"
+                xs, d2, marker=".", linestyle="-", color=color, label=f"{gain:g}dB"
             )
 
     if all_signals:
