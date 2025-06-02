@@ -16,6 +16,7 @@ __all__ = [
     "save_summary_txt",
     "report_csv",
     "report_html",
+    "save_snr_signal_json",
 ]
 
 # ──────────────────────────────────────────────── helpers
@@ -192,3 +193,33 @@ def report_html(
     html.append("</body></html>")
     html = "\n".join(html)
     path.write_text(html, encoding="utf-8")
+
+
+def save_snr_signal_json(
+    data: Dict[float, tuple[np.ndarray, np.ndarray]], cfg: Dict[str, Any], path: Path
+) -> None:
+    """Save SNR-Signal data and fitted curves as JSON."""
+
+    import numpy as np
+    from . import analysis
+
+    flag = cfg.get("output", {}).get("snr_signal_data", False)
+
+    def writer(p: Path) -> None:
+        adc_bits = int(cfg.get("sensor", {}).get("adc_bits", 16))
+        lsb_shift = int(cfg.get("sensor", {}).get("lsb_shift", 0))
+        full_scale = ((1 << adc_bits) - 1) * (1 << lsb_shift)
+        out: Dict[str, Any] = {}
+        for gain, (sig, snr) in sorted(data.items()):
+            rn = analysis.fit_clipped_snr_model(sig, snr, full_scale)
+            xs = np.linspace(float(sig.min()), float(sig.max()), 200)
+            snr_fit = analysis.clipped_snr_model(xs, rn, full_scale)
+            out[f"{gain:g}"] = {
+                "signal": sig.tolist(),
+                "snr": snr.tolist(),
+                "fit_signal": xs.tolist(),
+                "fit_snr": snr_fit.tolist(),
+            }
+        p.write_text(json.dumps(out, indent=2), encoding="utf-8")
+
+    _write_if_enabled(flag, path, writer)
