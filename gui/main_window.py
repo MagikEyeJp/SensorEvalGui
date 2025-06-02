@@ -152,6 +152,7 @@ def run_pipeline(
             prnu_data = collect_prnu_points(prnu_stats)
 
             roi_table = extract_roi_table(project, cfg)
+            snr_signal_data = collect_gain_snr_signal(roi_table, cfg)
             flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
             flat_rects = load_rois(flat_roi_file)
 
@@ -214,7 +215,9 @@ def run_pipeline(
                         prnu_map_tmp,
                         gain_map_tmp,
                     )
-                    dn_sat = calculate_dn_sat(flat_stack, cfg)
+                    dn_sat = calculate_dn_sat(
+                        flat_stack, cfg, snr_signal_data.get(gain_db)
+                    )
                     first = False
 
                 # SNR metrics for this gain
@@ -299,7 +302,7 @@ def run_pipeline(
                 "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
             )
             exp_data = collect_mid_roi_snr(roi_table, mid_idx)
-            sig_data = collect_gain_snr_signal(roi_table, cfg)
+            sig_data = snr_signal_data
 
             logging.info("Plotting SNR vs Signal (multi)")
             log_memory_usage("before snr_signal plot: ")
