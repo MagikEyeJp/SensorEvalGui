@@ -45,13 +45,29 @@ def _auto_labels(ratios: Sequence[float]) -> list[str]:
 
 
 def _smooth_and_second_derivative(
-    signal: np.ndarray, snr: np.ndarray, window: int = 5, poly: int = 2
+    signal: np.ndarray,
+    snr: np.ndarray,
+    window: int = 5,
+    poly: int = 2,
+    interp_points: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return smoothed SNR and its second derivative using Savitzky-Golay."""
+    """Return smoothed SNR and its second derivative using Savitzky-Golay.
+
+    When ``interp_points`` is provided and greater than ``signal.size``, the
+    ``signal`` and ``snr`` arrays are linearly interpolated to that length before
+    smoothing. This can help produce smoother curves when the original data
+    points are sparse.
+    """
 
     idx = np.argsort(signal)
     sig = np.asarray(signal, dtype=float)[idx]
     s = np.asarray(snr, dtype=float)[idx]
+
+    if interp_points is not None and interp_points > sig.size:
+        xs = np.linspace(float(sig.min()), float(sig.max()), int(interp_points))
+        ys = np.interp(xs, sig, s)
+        sig = xs
+        s = ys
 
     win = min(window, sig.size if sig.size % 2 else sig.size - 1)
     if win < poly + 2 or win < 3:
@@ -107,6 +123,7 @@ def plot_snr_vs_signal_multi(
     *,
     return_fig: bool = False,
     show_derivative: bool = False,
+    interp_points: int | None = None,
 ) -> Figure | None:
     """Plot SNR–Signal curves for multiple gains.
 
@@ -133,10 +150,16 @@ def plot_snr_vs_signal_multi(
             sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
             snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
         all_signals.append(sig)
+        if interp_points is not None and interp_points > sig.size:
+            xs = np.linspace(float(sig.min()), float(sig.max()), int(interp_points))
+            snr = np.interp(xs, sig, snr)
+            sig = xs
         snr_db = 20 * np.log10(snr)
         ax_snr.loglog(sig, snr_db, marker="o", linestyle="-", label=f"{gain:g}dB")
         if show_derivative:
-            sig_s, snr_smooth, d2 = _smooth_and_second_derivative(sig, snr)
+            sig_s, snr_smooth, d2 = _smooth_and_second_derivative(
+                sig, snr, interp_points=interp_points
+            )
             color = ax_snr.get_lines()[-1].get_color()
             ax_snr.loglog(
                 sig_s,
