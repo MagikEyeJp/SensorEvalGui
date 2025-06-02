@@ -150,17 +150,28 @@ def plot_snr_vs_signal_multi(
             sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
             snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
         all_signals.append(sig)
+        sig_orig = sig
+        snr_orig = snr
         if interp_points is not None and interp_points > sig.size:
             xs = np.linspace(float(sig.min()), float(sig.max()), int(interp_points))
             snr = np.interp(xs, sig, snr)
             sig = xs
         snr_db = 20 * np.log10(snr)
-        ax_snr.loglog(sig, snr_db, marker="o", linestyle="-", label=f"{gain:g}dB")
+        lines = ax_snr.loglog(sig, snr_db, linestyle="-", label=f"{gain:g}dB")
+        color = lines[0].get_color()
+        ax_snr.loglog(
+            sig_orig,
+            20 * np.log10(snr_orig),
+            linestyle="None",
+            marker="o",
+            color=color,
+            label="_nolegend_",
+        )
+
         if show_derivative:
             sig_s, snr_smooth, d2 = _smooth_and_second_derivative(
-                sig, snr, interp_points=interp_points
+                sig_orig, snr_orig, interp_points=interp_points
             )
-            color = ax_snr.get_lines()[-1].get_color()
             ax_snr.loglog(
                 sig_s,
                 20 * np.log10(snr_smooth),
