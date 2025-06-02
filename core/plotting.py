@@ -14,6 +14,7 @@ from matplotlib.figure import Figure
 import numpy as np
 
 from utils.logger import log_memory_usage
+from scipy.signal import savgol_filter
 
 from utils import config as cfgutil
 
@@ -41,6 +42,28 @@ def _validate_positive_finite(arr: np.ndarray, name: str) -> np.ndarray:
 
 def _auto_labels(ratios: Sequence[float]) -> list[str]:
     return [f"{r:g}×" for r in ratios]
+
+
+def _smooth_and_second_derivative(
+    signal: np.ndarray, snr: np.ndarray, window: int = 5, poly: int = 2
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return smoothed SNR and its second derivative using Savitzky-Golay."""
+
+    idx = np.argsort(signal)
+    sig = np.asarray(signal, dtype=float)[idx]
+    s = np.asarray(snr, dtype=float)[idx]
+
+    win = min(window, sig.size if sig.size % 2 else sig.size - 1)
+    if win < poly + 2 or win < 3:
+        s_smooth = s
+    else:
+        if win % 2 == 0:
+            win -= 1
+        s_smooth = savgol_filter(s, win, poly, mode="interp")
+
+    d1 = np.gradient(s_smooth, sig)
+    d2 = np.gradient(d1, sig)
+    return sig, s_smooth, d2
 
 
 def plot_snr_vs_signal(
@@ -83,13 +106,21 @@ def plot_snr_vs_signal_multi(
     output_path: Path,
     *,
     return_fig: bool = False,
+    show_derivative: bool = False,
 ) -> Figure | None:
-    """Plot SNR–Signal curves for multiple gains."""
+    """Plot SNR–Signal curves for multiple gains.
+
+    When ``show_derivative`` is ``True`` an additional subplot is drawn below the
+    main plot showing the second derivative of the smoothed SNR curve.
+    """
     logging.info("plot_snr_vs_signal_multi: output=%s", output_path)
     log_memory_usage("plot start: ")
 
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
-    fig = plt.figure()
+    if show_derivative:
+        fig, (ax_snr, ax_d2) = plt.subplots(2, 1, figsize=(6, 8), sharex=True)
+    else:
+        fig, ax_snr = plt.subplots()
 
     all_signals = []
     for gain, (sig, snr) in sorted(data.items()):
@@ -103,7 +134,19 @@ def plot_snr_vs_signal_multi(
             snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
         all_signals.append(sig)
         snr_db = 20 * np.log10(snr)
-        plt.loglog(sig, snr_db, marker="o", linestyle="-", label=f"{gain:g}dB")
+        ax_snr.loglog(sig, snr_db, marker="o", linestyle="-", label=f"{gain:g}dB")
+        if show_derivative:
+            sig_s, snr_smooth, d2 = _smooth_and_second_derivative(sig, snr)
+            color = ax_snr.get_lines()[-1].get_color()
+            ax_snr.loglog(
+                sig_s,
+                20 * np.log10(snr_smooth),
+                linestyle="--",
+                color=color,
+            )
+            ax_d2.semilogx(
+                sig_s, d2, marker=".", linestyle="-", color=color, label=f"{gain:g}dB"
+            )
 
     if all_signals:
         concat = np.concatenate(all_signals)
@@ -113,15 +156,21 @@ def plot_snr_vs_signal_multi(
             xs = np.asarray([x_min * 0.9, x_max * 1.1])
         else:
             xs = np.linspace(x_min, x_max, 200)
-        plt.loglog(xs, 20 * np.log10(np.sqrt(xs)), linestyle=":", label="Ideal √µ")
+        ax_snr.loglog(xs, 20 * np.log10(np.sqrt(xs)), linestyle=":", label="Ideal √µ")
 
-    plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
-    plt.xlabel("Signal (DN)")
-    plt.ylabel("SNR (dB)")
-    plt.title("SNR vs Signal")
-    plt.grid(True, which="both")
-    plt.legend()
-    plt.tight_layout()
+    ax_snr.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
+    ax_snr.set_xlabel("Signal (DN)")
+    ax_snr.set_ylabel("SNR (dB)")
+    ax_snr.set_title("SNR vs Signal")
+    ax_snr.grid(True, which="both")
+    ax_snr.legend()
+    if show_derivative:
+        ax_d2.set_xlabel("Signal (DN)")
+        ax_d2.set_ylabel("d²SNR / dDN²")
+        ax_d2.set_title("Second Derivative")
+        ax_d2.grid(True, which="both")
+        ax_d2.legend()
+    fig.tight_layout()
     fig.savefig(output_path)
     if return_fig:
         log_memory_usage("plot end: ")
