@@ -71,6 +71,15 @@ def _smooth_and_second_derivative(
         np.array2string(s, precision=3, threshold=10),
     )
 
+    diffs = np.diff(sig)
+    close_idx = np.where(np.abs(diffs) < 1.0)[0]
+    if close_idx.size > 0:
+        logging.debug(
+            "_smooth_and_second_derivative: close signal points at idx %s -> diffs=%s",
+            close_idx.tolist(),
+            np.array2string(diffs[close_idx], precision=3, threshold=10),
+        )
+
     if interp_points is not None and interp_points > sig.size:
         xs = np.linspace(float(sig.min()), float(sig.max()), int(interp_points))
         ys = np.interp(xs, sig, s)
