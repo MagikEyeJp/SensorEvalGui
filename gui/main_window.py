@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 
 from utils.config import load_config
 import utils.config as cfgutil
-from utils.logger import log_memory_usage
+from utils.logger import log_memory_usage, apply_logging_config
 
 # ensure only one pipeline runs at a time
 pipeline_lock = threading.Lock()
@@ -114,6 +114,7 @@ def run_pipeline(
     status: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, float]:
     """Run full analysis pipeline with logging and memory checks."""
+    apply_logging_config(cfg)
     logging.info("Pipeline start: %s", project)
     with pipeline_lock:
         try:
@@ -513,6 +514,7 @@ class MainWindow(QMainWindow):
             )
             return
         self.config = load_config(cfg_path)
+        apply_logging_config(self.config)
         self.status.setText(f"Project loaded: {self.project_dir}")
         self.run_btn.setEnabled(True)
         self.run_analysis()
@@ -529,6 +531,7 @@ class MainWindow(QMainWindow):
             return
         # reload configuration fresh each run to avoid stale values
         self.config = load_config(cfg_path)
+        apply_logging_config(self.config)
         if self.worker is not None:
             return
         self.run_btn.setEnabled(False)

@@ -262,6 +262,9 @@ output:
     - PRNU (%)
     - System Sensitivity
 
+logging:
+  level: INFO             # ログ出力レベルを指定
+
 ```
 
 ### 📥 フォルダ構成

@@ -2,6 +2,7 @@
 import tempfile
 from pathlib import Path
 import pytest
+import logging
 
 yaml = pytest.importorskip("yaml")
 
@@ -79,3 +80,16 @@ def test_nearest_gain_exposure():
     }
     assert nearest_gain(cfg, 2.0) == 0.0
     assert nearest_exposure(cfg, 2.0) == 1.0
+
+
+def test_apply_logging_config_sets_level():
+    from utils.logger import apply_logging_config
+
+    logger = logging.getLogger()
+    old_level = logger.level
+    cfg = {"logging": {"level": "DEBUG"}}
+    apply_logging_config(cfg)
+    try:
+        assert logger.level == logging.DEBUG
+    finally:
+        logger.setLevel(old_level)

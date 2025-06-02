@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 try:
     import psutil  # type: ignore
@@ -21,6 +21,13 @@ def setup_logging(log_file: Optional[Path] = None, level: int = logging.INFO) ->
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=handlers,
     )
+
+
+def apply_logging_config(cfg: Dict[str, Any]) -> None:
+    """Set log level from config dictionary."""
+    level_name = str(cfg.get("logging", {}).get("level", "INFO")).upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.getLogger().setLevel(level)
 
 
 def log_memory_usage(prefix: str = "") -> None:
