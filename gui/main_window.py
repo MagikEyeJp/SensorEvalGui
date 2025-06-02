@@ -326,6 +326,10 @@ def run_pipeline(
                 out_dir / "snr_signal.png",
                 return_fig=True,
                 show_derivative=True,
+                interp_points=(
+                    (1 << int(cfg.get("sensor", {}).get("adc_bits", 16)))
+                    * (1 << int(cfg.get("sensor", {}).get("lsb_shift", 0)))
+                ),
             )
             log_memory_usage("after snr_signal plot: ")
 
