@@ -1026,9 +1026,6 @@ def calculate_dn_sat(
         cfg.get("reference", {}).get("sat_factor", 0.95),
     )
 
-    # Estimate full-scale from measured maximum and illumination factor
-    max_from_factor = float(np.max(flat_stack)) / max(sat_factor, 1e-6)
-
     adc_bits = int(cfg.get("sensor", {}).get("adc_bits", 16))
     lsb_shift = int(cfg.get("sensor", {}).get("lsb_shift", 0))
     adc_full_scale = ((1 << adc_bits) - 1) * (1 << lsb_shift)
@@ -1036,7 +1033,7 @@ def calculate_dn_sat(
     # Reference threshold based on the configured saturation factor
     reference_thresh = adc_full_scale * sat_factor
 
-    dn_sat = max(est, p999, max_from_factor, reference_thresh)
+    dn_sat = max(est, p999, reference_thresh)
     return min(dn_sat, adc_full_scale)
 
 
