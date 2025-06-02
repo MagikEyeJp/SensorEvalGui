@@ -44,6 +44,15 @@ def test_plot_snr_vs_signal_multi_single_point(tmp_path):
     assert (tmp_path / "single_multi.png").is_file()
 
 
+def test_plot_snr_vs_signal_multi_derivative(tmp_path):
+    data = {0.0: (np.array([1.0, 2.0, 3.0]), np.array([2.0, 4.0, 6.0]))}
+    fig = plotting.plot_snr_vs_signal_multi(
+        data, {}, tmp_path / "deriv.png", return_fig=True, show_derivative=True
+    )
+    assert (tmp_path / "deriv.png").is_file()
+    assert len(fig.axes) == 2
+
+
 def test_plot_snr_vs_signal_multi_invalid(tmp_path):
     data = {0.0: (np.array([1.0]), np.array([-1.0]))}
     with pytest.raises(ValueError):
