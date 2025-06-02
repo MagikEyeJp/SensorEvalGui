@@ -15,6 +15,7 @@ import numpy as np
 
 from utils.logger import log_memory_usage
 from scipy.interpolate import UnivariateSpline
+from scipy.optimize import curve_fit
 
 from utils import config as cfgutil
 
@@ -50,6 +51,8 @@ def _smooth_and_second_derivative(
     window: int = 5,
     poly: int = 2,
     interp_points: int | None = None,
+    *,
+    use_logistic: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return smoothed SNR and its second derivative using a spline fit.
 
@@ -89,7 +92,49 @@ def _smooth_and_second_derivative(
             "_smooth_and_second_derivative: interpolated to %d points", len(sig)
         )
 
-    if sig.size >= 4:
+    s_smooth: np.ndarray
+    d2: np.ndarray
+
+    # attempt logistic curve fit when requested
+    if use_logistic and sig.size >= 4:
+
+        def _logistic(
+            x: np.ndarray, a: float, b: float, c: float, d: float
+        ) -> np.ndarray:
+            return a + b / (1.0 + np.exp(-(x - c) / d))
+
+        thresh = 0.6 * np.max(sig)
+        mask = sig >= thresh
+        if np.count_nonzero(mask) >= 4:
+            sig_fit = sig[mask]
+            s_fit = s[mask]
+            init = [
+                float(s_fit[-1]),
+                float(s_fit[0] - s_fit[-1]),
+                float(sig_fit[len(sig_fit) // 2]),
+                1.0,
+            ]
+            try:
+                popt, _ = curve_fit(_logistic, sig_fit, s_fit, p0=init, maxfev=10000)
+                s_smooth = _logistic(sig, *popt)
+                e = np.exp(-(sig - popt[2]) / popt[3])
+                d2 = (popt[1] / (popt[3] ** 2)) * e * (e**2 - 1.0) / (1.0 + e) ** 4
+                logging.debug(
+                    "_smooth_and_second_derivative: logistic second derivative=%s",
+                    np.array2string(d2, precision=3, threshold=10),
+                )
+            except Exception as exc:
+                logging.debug(
+                    "_smooth_and_second_derivative: logistic fit failed due to %s", exc
+                )
+                s_smooth = s
+                d1 = np.gradient(s_smooth, sig)
+                d2 = np.gradient(d1, sig)
+        else:
+            s_smooth = s
+            d1 = np.gradient(s_smooth, sig)
+            d2 = np.gradient(d1, sig)
+    elif sig.size >= 4:
         spline = UnivariateSpline(sig, s, s=0.2, k=min(poly + 1, 5))
         s_smooth = spline(sig)
         d2 = spline.derivative(2)(sig)
@@ -195,16 +240,16 @@ def plot_snr_vs_signal_multi(
             label="_nolegend_",
         )
 
+        sig_s, snr_smooth, d2 = _smooth_and_second_derivative(
+            sig_orig, snr_orig, interp_points=interp_points, use_logistic=True
+        )
+        ax_snr.loglog(
+            sig_s,
+            20 * np.log10(snr_smooth),
+            linestyle="--",
+            color=color,
+        )
         if show_derivative:
-            sig_s, snr_smooth, d2 = _smooth_and_second_derivative(
-                sig_orig, snr_orig, interp_points=interp_points
-            )
-            ax_snr.loglog(
-                sig_s,
-                20 * np.log10(snr_smooth),
-                linestyle="--",
-                color=color,
-            )
             ax_d2.semilogx(
                 sig_s, d2, marker=".", linestyle="-", color=color, label=f"{gain:g}dB"
             )
