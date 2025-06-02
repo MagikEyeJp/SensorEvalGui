@@ -196,7 +196,11 @@ def report_html(
 
 
 def save_snr_signal_json(
-    data: Dict[float, tuple[np.ndarray, np.ndarray]], cfg: Dict[str, Any], path: Path
+    data: Dict[float, tuple[np.ndarray, np.ndarray]],
+    cfg: Dict[str, Any],
+    path: Path,
+    *,
+    black_levels: Dict[float, float] | None = None,
 ) -> None:
     """Save SNR-Signal data and fitted curves as JSON."""
 
@@ -211,9 +215,10 @@ def save_snr_signal_json(
         full_scale = ((1 << adc_bits) - 1) * (1 << lsb_shift)
         out: Dict[str, Any] = {}
         for gain, (sig, snr) in sorted(data.items()):
-            rn = analysis.fit_clipped_snr_model(sig, snr, full_scale)
+            bl = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
+            rn = analysis.fit_clipped_snr_model(sig, snr, full_scale, black_level=bl)
             xs = np.linspace(float(sig.min()), float(sig.max()), 200)
-            snr_fit = analysis.clipped_snr_model(xs, rn, full_scale)
+            snr_fit = analysis.clipped_snr_model(xs, rn, full_scale, black_level=bl)
             out[f"{gain:g}"] = {
                 "signal": sig.tolist(),
                 "snr": snr.tolist(),

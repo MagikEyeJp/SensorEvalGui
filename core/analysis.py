@@ -56,12 +56,16 @@ __all__ = [
 # multiple times during a single session.
 _stack_cache: Dict[Path, np.ndarray] = {}
 _stats_cache: Dict[tuple[Path, float, float, bool], Dict[str, float]] = {}
+_dark_cache: Dict[
+    tuple[Path, float], Tuple[float, float, np.ndarray, np.ndarray, float]
+] = {}
 
 
 def clear_cache() -> None:
     """Empty cached image stacks and ROI statistics."""
     _stack_cache.clear()
     _stats_cache.clear()
+    _dark_cache.clear()
 
 
 def _load_stack_cached(folder: Path) -> np.ndarray:
@@ -756,7 +760,9 @@ def collect_mid_roi_snr(
 
 
 def collect_gain_snr_signal(
-    rows: List[Dict[str, Any]], cfg: Dict[str, Any]
+    rows: List[Dict[str, Any]],
+    cfg: Dict[str, Any],
+    black_levels: Dict[float, float] | None = None,
 ) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
     """Return SNR curves indexed by signal level for each gain using ROI rows.
 
@@ -785,10 +791,11 @@ def collect_gain_snr_signal(
             continue
         if mean < min_sig_factor * std:
             continue
-        snr = mean / std
+        gain = float(row.get("Gain (dB)", 0.0))
+        black = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
+        snr = (mean - black) / std
         if excl_low and 20 * np.log10(snr) < snr_thresh:
             continue
-        gain = float(row.get("Gain (dB)", 0.0))
         data.setdefault(gain, []).append((mean, snr))
 
     res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
@@ -952,6 +959,12 @@ def calculate_dark_noise_gain(
     Tuple[float, float, np.ndarray, np.ndarray, float]
         ``(dsnu, read_noise, dsnu_map, read_noise_map, black_level)`` where maps match the image size.
     """
+    project_dir = Path(project_dir)
+    cache_key = (project_dir, float(gain_db))
+    cached = _dark_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     gain_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg)
     dark_folder = gain_folder / cfg["measurement"].get("dark_folder", "dark")
     if status:
@@ -974,7 +987,9 @@ def calculate_dark_noise_gain(
     else:
         read_noise_map = np.std(stack, axis=0)
     read_noise = _reduce(read_noise_map[mask], stat_mode)
-    return dsnu, read_noise, dsnu_map, read_noise_map, black_level
+    result = (dsnu, read_noise, dsnu_map, read_noise_map, black_level)
+    _dark_cache[cache_key] = result
+    return result
 
 
 def _estimate_sat_from_snr(signal: np.ndarray, snr: np.ndarray) -> float:
