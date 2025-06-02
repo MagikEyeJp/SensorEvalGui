@@ -26,9 +26,19 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from jinja2 import Template
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QFileDialog, QTextEdit, QPushButton, QLabel,
-    QVBoxLayout, QWidget, QHBoxLayout, QSplitter, QMessageBox, QProgressBar,
-    QSizePolicy
+    QApplication,
+    QMainWindow,
+    QFileDialog,
+    QTextEdit,
+    QPushButton,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+    QHBoxLayout,
+    QSplitter,
+    QMessageBox,
+    QProgressBar,
+    QSizePolicy,
 )
 from PySide6 import QtCore
 import yaml
@@ -46,12 +56,13 @@ FULL_WELL_DN = 65535
 # }
 CONFIG_YAML = "config.yaml"
 ROI_ZIP_NAME = "roi.zip"
-ROI_MID_INDEX = 2          # mid-gray ROI index
+ROI_MID_INDEX = 2  # mid-gray ROI index
 IMG_PATTERNS = ("*.tif", "*.tiff")
 # ---- thresholds for domain colouring ----
-RN_FACTOR   = 5      # < σ_read × 5  → read-noise domain
-IDEAL_RATIO = 0.90   # < 90 % of ideal √k  → dark-current / headroom limit
-SLOPE_TH = 0.30     # 勾配 < 0.3 → dark-current/headroom
+RN_FACTOR = 5  # < σ_read × 5  → read-noise domain
+IDEAL_RATIO = 0.90  # < 90 % of ideal √k  → dark-current / headroom limit
+SLOPE_TH = 0.30  # 勾配 < 0.3 → dark-current/headroom
+
 
 # ------------ ヘルパ ------------
 def load_stack(folder: pathlib.Path) -> np.ndarray:
@@ -61,6 +72,7 @@ def load_stack(folder: pathlib.Path) -> np.ndarray:
     if not files:
         raise FileNotFoundError(f"No TIFF images in {folder}")
     return np.stack([iio.imread(f) for f in sorted(files)]).astype(np.int32)
+
 
 def load_rois(zip_path: pathlib.Path):
     rects = []
@@ -73,23 +85,28 @@ def load_rois(zip_path: pathlib.Path):
         raise ValueError("roi.zip has no rectangles")
     return rects
 
+
 def roi_stats(stack: np.ndarray, roi):
     x, y, w, h = roi
-    region = stack[:, y:y + h, x:x + w]
-    m = region.mean((1, 2)); s = region.std((1, 2))
+    region = stack[:, y : y + h, x : x + w]
+    m = region.mean((1, 2))
+    s = region.std((1, 2))
     return float(m.mean()), float(np.sqrt((s**2).mean()))
+
 
 def b64(path: pathlib.Path) -> str:
     return base64.b64encode(path.read_bytes()).decode()
 
+
 # ------------ ワーカー ------------
 class EvalWorker(QtCore.QThread):
     finished = QtCore.Signal(str, object, object)
-    error    = QtCore.Signal(str)
+    error = QtCore.Signal(str)
     progress = QtCore.Signal(int)
 
     def __init__(self, project: pathlib.Path):
-        super().__init__(); self.project = project
+        super().__init__()
+        self.project = project
 
     def run(self):
         try:
@@ -104,7 +121,7 @@ class EvalWorker(QtCore.QThread):
             """
             DSNU を減算して 0–FullWell にクリップしたスタックを返す
             """
-            st = load_stack(folder) - dark_avg          # DSNU 補正
+            st = load_stack(folder) - dark_avg  # DSNU 補正
             st = np.clip(st, 0, FULL_WELL_DN)
             return st.astype(np.int32)
 
@@ -112,7 +129,7 @@ class EvalWorker(QtCore.QThread):
             # stack: (N, H, W)
             means, stds = [], []
             for x, y, w, h in rects:
-                reg = stack[:, y:y+h, x:x+w]
+                reg = stack[:, y : y + h, x : x + w]
                 means.append(reg.mean())
                 stds.append(reg.std())
             return np.array(means), np.array(stds)
@@ -143,21 +160,29 @@ class EvalWorker(QtCore.QThread):
             (root / "report.html").write_text("\n".join(html), encoding="utf-8")
 
         # evaluate
-        root = self.project; self.progress.emit(0)
-        rois = load_rois(root / ROI_ZIP_NAME); self.progress.emit(5)
+        root = self.project
+        self.progress.emit(0)
+        rois = load_rois(root / ROI_ZIP_NAME)
+        self.progress.emit(5)
         cfg_path = root / CONFIG_YAML
         if cfg_path.exists():
             with cfg_path.open() as f:
                 cfg = yaml.safe_load(f) or {}
         else:
-            cfg = {}                        # ← 無い場合は空 dict
+            cfg = {}  # ← 無い場合は空 dict
 
         # 既定値
         default_gains = [{"name": "gain_0dB", "db": 0}]
-        default_exps  = {2.0:"chart_2x",1.0:"chart_1x",0.5:"chart_0.5x",
-                        0.25:"chart_0.25x",0.125:"chart_0.125x",0.0625:"chart_0.0625x"}
+        default_exps = {
+            2.0: "chart_2x",
+            1.0: "chart_1x",
+            0.5: "chart_0.5x",
+            0.25: "chart_0.25x",
+            0.125: "chart_0.125x",
+            0.0625: "chart_0.0625x",
+        }
 
-        gain_defs   = cfg.get("gains", default_gains)
+        gain_defs = cfg.get("gains", default_gains)
         exp_folders = cfg.get("exposures", default_exps)
 
         dark_avg = {}
@@ -171,11 +196,12 @@ class EvalWorker(QtCore.QThread):
             if not gpath.exists():
                 print(f"[warn] skip missing folder {gpath}")
                 continue
-   
+
             # ダーク平均 → DSNU
             dark_stack = load_stack(gpath / "dark")
-            dark_avg[gpath.name]   = dark_stack.mean(0)
-            _, read_noise[gpath.name] = roi_stats(dark_stack, rois[ROI_MID_INDEX]); self.progress.emit(15)  # rn = σ_read (DN rms)
+            dark_avg[gpath.name] = dark_stack.mean(0)
+            _, read_noise[gpath.name] = roi_stats(dark_stack, rois[ROI_MID_INDEX])
+            self.progress.emit(15)  # rn = σ_read (DN rms)
 
             stack_cache = {}
             exist_fac = []
@@ -187,42 +213,58 @@ class EvalWorker(QtCore.QThread):
                 exist_fac.append(fac)
                 key = (gpath.name, fac)
                 stack_cache[key] = load_corrected(gpath / folder, dark_avg[gpath.name])
-            
-            stats_cache: dict[float, dict[str, np.ndarray]] = {}    # キー = 露光倍率 (fac)     値 = {"mean":…, "std":…, "lin":…, "snr":…}
+
+            stats_cache: dict[float, dict[str, np.ndarray]] = (
+                {}
+            )  # キー = 露光倍率 (fac)     値 = {"mean":…, "std":…, "lin":…, "snr":…}
             for fac in exist_fac:
                 key = (gpath.name, fac)
                 # DSNU 減算済スタック (R, N)
-                st = stack_cache[key]                  # DSNU 減算済スタック (R, N)
-                meansR, stdsR = roi_stats_batch(st, rois)   # 形状 (R, N)
+                st = stack_cache[key]  # DSNU 減算済スタック (R, N)
+                meansR, stdsR = roi_stats_batch(st, rois)  # 形状 (R, N)
                 print(f"roi_stats_batch({fac}): {meansR.shape}, {stdsR.shape}")
                 linR = meansR / stdsR
                 snrR = 20 * np.log10(linR, where=stdsR > 0, out=np.zeros_like(linR))
                 stats_cache[key] = dict(mean=meansR, std=stdsR, lin=linR, snr=snrR)
 
             # ROI 統計 (Exp1x)
-            rows = []; sig_all=[]; snr_all=[]
-            for i,r in enumerate(rois):
+            rows = []
+            sig_all = []
+            snr_all = []
+            for i, r in enumerate(rois):
                 data = stats_cache[(gpath.name, 1.00)]
-                rows.append(dict(ROI=i, Mean=data["mean"][i], Std=data["std"][i], SNR_dB=data["snr"][i]))
+                rows.append(
+                    dict(
+                        ROI=i,
+                        Mean=data["mean"][i],
+                        Std=data["std"][i],
+                        SNR_dB=data["snr"][i],
+                    )
+                )
             df = pd.DataFrame(rows)
             df.to_csv(root / f"roi_stats_{gpath.name}.csv", index=False)
             self.progress.emit(35)
 
             # Full-Well
-            flat_mean,_ = roi_stats(load_corrected(gpath / "flat", dark_avg[gpath.name]), rois[ROI_MID_INDEX])
+            flat_mean, _ = roi_stats(
+                load_corrected(gpath / "flat", dark_avg[gpath.name]),
+                rois[ROI_MID_INDEX],
+            )
             dn_sat = flat_mean / 0.95
-            dr_fw = 20*math.log10(dn_sat/read_noise[gpath.name])
+            dr_fw = 20 * math.log10(dn_sat / read_noise[gpath.name])
 
-            s_txt = ( f"Gain: {gpath.name} ({g['db']} dB) --------------------\n"
-                    f"Read noise : {read_noise[gpath.name]:.2f} DN rms\n"
-                    f"DN_sat     : {dn_sat:.0f} DN (≈{dn_sat/FULL_WELL_DN*100:.1f}% of 16-bit)\n"
-                    f"DR_FW      : {dr_fw:.1f} dB\n")
+            s_txt = (
+                f"Gain: {gpath.name} ({g['db']} dB) --------------------\n"
+                f"Read noise : {read_noise[gpath.name]:.2f} DN rms\n"
+                f"DN_sat     : {dn_sat:.0f} DN (≈{dn_sat/FULL_WELL_DN*100:.1f}% of 16-bit)\n"
+                f"DR_FW      : {dr_fw:.1f} dB\n"
+            )
             summary += s_txt
 
         # ===== グラフ 1: SNR-Signal （各露光を色分け＋領域着色） =====
         fig1, ax1 = plt.subplots()
-        ls_map = {'gain_0dB':'-', 'gain_6dB':'--', 'gain_12dB':':'}
-        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        ls_map = {"gain_0dB": "-", "gain_6dB": "--", "gain_12dB": ":"}
+        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
         for g in gain_defs:
             for idx, fac in enumerate(sorted(exist_fac, reverse=True)):
@@ -238,29 +280,54 @@ class EvalWorker(QtCore.QThread):
                 clr, mkr = [], []
                 for mu, lin, sl in zip(sig, snr_lin, slope):
                     if mu < RN_FACTOR * read_noise[g["name"]]:  # read-noise
-                        clr.append('tab:cyan');  mkr.append('v')   # read-noise
+                        clr.append("tab:cyan")
+                        mkr.append("v")  # read-noise
                     elif sl < SLOPE_TH:
-                        clr.append('tab:red');   mkr.append('^')   # dark-current
+                        clr.append("tab:red")
+                        mkr.append("^")  # dark-current
                     else:
-                        clr.append(colors[idx % len(colors)]); mkr.append('o')  # shot-noise
+                        clr.append(colors[idx % len(colors)])
+                        mkr.append("o")  # shot-noise
 
                 # プロット（点ごと形状）
                 for x, y, c, mk in zip(sig, snr_db, clr, mkr):
-                    ax1.scatter(x, y, c=c, marker=mk, s=36, edgecolors='k' if mk!='o' else 'none')
+                    ax1.scatter(
+                        x,
+                        y,
+                        c=c,
+                        marker=mk,
+                        s=36,
+                        edgecolors="k" if mk != "o" else "none",
+                    )
 
                 # シリーズライン（薄色）
-                ax1.semilogx(sig, snr_db, '-', color=colors[idx % len(colors)],
-                            alpha=.3, label=f"{g['name']} ×{fac}")
+                ax1.semilogx(
+                    sig,
+                    snr_db,
+                    "-",
+                    color=colors[idx % len(colors)],
+                    alpha=0.3,
+                    label=f"{g['name']} ×{fac}",
+                )
 
         # 書式
-        ax1.grid(which='both', ls='--', alpha=.6)
-        ax1.set_xlabel("Signal [DN]"); ax1.set_ylabel("SNR [dB]")
+        ax1.grid(which="both", ls="--", alpha=0.6)
+        ax1.set_xlabel("Signal [DN]")
+        ax1.set_ylabel("SNR [dB]")
         ax1.set_title("SNR vs Signal (DSNU subtracted)")
 
         # 凡例追加
-        ax1.scatter([], [], c='tab:cyan', marker='v', label='read-noise domain',  s=40)
-        ax1.scatter([], [], c='gray',     marker='o', label='shot-noise (ideal)', s=30)
-        ax1.scatter([], [], c='tab:red',  marker='^', label='dark-current limit', s=40, edgecolors='k')
+        ax1.scatter([], [], c="tab:cyan", marker="v", label="read-noise domain", s=40)
+        ax1.scatter([], [], c="gray", marker="o", label="shot-noise (ideal)", s=30)
+        ax1.scatter(
+            [],
+            [],
+            c="tab:red",
+            marker="^",
+            label="dark-current limit",
+            s=40,
+            edgecolors="k",
+        )
         ax1.legend(fontsize=7)
         fig1.tight_layout()
         fname1 = f"snr_signal_{g['name']}.png"
@@ -269,7 +336,11 @@ class EvalWorker(QtCore.QThread):
         # ===== グラフ 2: SNR-Exposure (mid-gray) =================================
         fig2, ax2 = plt.subplots()
 
-        gain_color = {'gain_0dB':'tab:blue', 'gain_6dB':'tab:green', 'gain_12dB':'tab:red'}
+        gain_color = {
+            "gain_0dB": "tab:blue",
+            "gain_6dB": "tab:green",
+            "gain_12dB": "tab:red",
+        }
         for g in gain_defs:
             facs, snr_lin_mid, colors_exp = [], [], []
             for fac in sorted(exist_fac):
@@ -280,31 +351,43 @@ class EvalWorker(QtCore.QThread):
             ideal = [base * math.sqrt(f) for f in facs]
 
             # ① 全 ROI を灰色ドットで散布
-            for i, r in enumerate(rois):                                          # 全パッチでループ
+            for i, r in enumerate(rois):  # 全パッチでループ
                 lin = []
                 for fac in sorted(exist_fac):
                     lin.append(stats_cache[(g["name"], fac)]["lin"][i])
-                ax2.loglog(facs, lin, '.', color='lightgray', alpha=.4, zorder=1)
+                ax2.loglog(facs, lin, ".", color="lightgray", alpha=0.4, zorder=1)
 
             # ② mid-gray の測定線を上に重ねる
             # --- 判定しきい値（90 %）で色分け ---
             for x, y, y_ideal in zip(facs, snr_lin_mid, ideal):
-                if y < 0.9 * y_ideal:          # 頭打ち（dark-current / 他ノイズ）
-                    colors_exp.append('tab:red')
-                else:                          # 理想域
-                    colors_exp.append('tab:blue')
+                if y < 0.9 * y_ideal:  # 頭打ち（dark-current / 他ノイズ）
+                    colors_exp.append("tab:red")
+                else:  # 理想域
+                    colors_exp.append("tab:blue")
             # --- プロット ---
-            ax2.loglog(facs, snr_lin_mid, 'o-', color=gain_color[g["name"]], zorder=3, label=g['name'])
+            ax2.loglog(
+                facs,
+                snr_lin_mid,
+                "o-",
+                color=gain_color[g["name"]],
+                zorder=3,
+                label=g["name"],
+            )
             ax2.scatter(facs, snr_lin_mid, c=colors_exp, s=40, zorder=3)
-            ax2.loglog(facs, ideal, 'k--', lw=1, label=f'{g["name"]} Ideal √k', zorder=2)
+            ax2.loglog(
+                facs, ideal, "k--", lw=1, label=f'{g["name"]} Ideal √k', zorder=2
+            )
 
             # ③ 既存：SNR=1 横線
-            ax2.axhline(1.0, ls='--', color='cyan', label='SNR = 1 (read-noise)', zorder=0)
+            ax2.axhline(
+                1.0, ls="--", color="cyan", label="SNR = 1 (read-noise)", zorder=0
+            )
 
         # 書式
-        ax2.grid(which='both', ls='--', alpha=.6)
-        ax2.set_xlabel('Rel. exposure'); ax2.set_ylabel('Linear SNR')
-        ax2.set_title('SNR vs Exposure (mid-gray)')
+        ax2.grid(which="both", ls="--", alpha=0.6)
+        ax2.set_xlabel("Rel. exposure")
+        ax2.set_ylabel("Linear SNR")
+        ax2.set_title("SNR vs Exposure (mid-gray)")
         ax2.legend(fontsize=8)
         fig2.tight_layout()
         fname2 = f"snr_exposure_{g['name']}.png"
@@ -313,45 +396,76 @@ class EvalWorker(QtCore.QThread):
 
         figs_saved.setdefault(g["name"], []).extend([fname1, fname2])
 
-        (root/"summary.txt").write_text(summary)
+        (root / "summary.txt").write_text(summary)
         _write_report(root, gain_defs, figs_saved)
 
-        return summary,fig1,fig2
+        return summary, fig1, fig2
 
 
 # ------------ GUI ------------
 class MainWindow(QMainWindow):
     def __init__(self):
-        super().__init__(); self.setWindowTitle("Sensor Evaluator Qt"); self.resize(1200,720)
-        self.lbl=QLabel("Project: not selected"); self.btn_sel=QPushButton("Select…"); self.btn_sel.setShortcut("Ctrl+O")
-        self.btn_run=QPushButton("Run"); self.btn_run.setEnabled(False); self.btn_run.setShortcut("Ctrl+R")
-        self.btn_run.setDefault(True); self.btn_run.setEnabled(False)
-        self.pbar=QProgressBar(); self.pbar.setRange(0,100)
-        hl=QHBoxLayout(); [hl.addWidget(w) for w in (self.lbl,self.btn_sel,self.btn_run,self.pbar)]; hl.addStretch()
-        top=QWidget(); top.setLayout(hl)
-        self.text=QTextEdit(); self.text.setReadOnly(True)
-        self.canvas1=FigureCanvas(plt.figure())
-        self.canvas2=FigureCanvas(plt.figure())
-        self.canvas1.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Expanding)
-        self.canvas2.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Expanding)
-        self.canvas1.draw(); self.canvas2.draw()
-        pl=QHBoxLayout(); pl.addWidget(self.canvas1); pl.addWidget(self.canvas2); plots=QWidget(); plots.setLayout(pl)
-        splitter=QSplitter(QtCore.Qt.Vertical); splitter.addWidget(self.text); splitter.addWidget(plots); splitter.setSizes([200,500])
-        splitter.setStretchFactor(0,0); splitter.setStretchFactor(1,1)
-        central=QWidget(); v=QVBoxLayout(central); v.addWidget(top); v.addWidget(splitter); self.setCentralWidget(central)
-        self.btn_sel.clicked.connect(self.sel); self.btn_run.clicked.connect(self.run_eval)
-        self.project: pathlib.Path|None=None; self.worker=None
+        super().__init__()
+        self.setWindowTitle("Sensor Evaluator Qt")
+        self.resize(1200, 720)
+        self.lbl = QLabel("Project: not selected")
+        self.btn_sel = QPushButton("Select…")
+        self.btn_sel.setShortcut("Ctrl+O")
+        self.btn_run = QPushButton("Run")
+        self.btn_run.setEnabled(False)
+        self.btn_run.setShortcut("Ctrl+R")
+        self.btn_run.setDefault(True)
+        self.btn_run.setEnabled(False)
+        self.pbar = QProgressBar()
+        self.pbar.setRange(0, 100)
+        hl = QHBoxLayout()
+        [hl.addWidget(w) for w in (self.lbl, self.btn_sel, self.btn_run, self.pbar)]
+        hl.addStretch()
+        top = QWidget()
+        top.setLayout(hl)
+        self.text = QTextEdit()
+        self.text.setReadOnly(True)
+        self.canvas1 = FigureCanvas(plt.figure())
+        self.canvas2 = FigureCanvas(plt.figure())
+        self.canvas1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvas2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvas1.draw()
+        self.canvas2.draw()
+        pl = QHBoxLayout()
+        pl.addWidget(self.canvas1)
+        pl.addWidget(self.canvas2)
+        plots = QWidget()
+        plots.setLayout(pl)
+        splitter = QSplitter(QtCore.Qt.Vertical)
+        splitter.addWidget(self.text)
+        splitter.addWidget(plots)
+        splitter.setSizes([200, 500])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        central = QWidget()
+        v = QVBoxLayout(central)
+        v.addWidget(top)
+        v.addWidget(splitter)
+        self.setCentralWidget(central)
+        self.btn_sel.clicked.connect(self.sel)
+        self.btn_run.clicked.connect(self.run_eval)
+        self.project: pathlib.Path | None = None
+        self.worker = None
 
     def sel(self):
-        p=QFileDialog.getExistingDirectory(self,"Select project")
+        p = QFileDialog.getExistingDirectory(self, "Select project")
         if p:
-            self.project=pathlib.Path(p); self.lbl.setText(f"Project: {p}")
-            self.btn_run.setEnabled((self.project/ROI_ZIP_NAME).exists())
+            self.project = pathlib.Path(p)
+            self.lbl.setText(f"Project: {p}")
+            self.btn_run.setEnabled((self.project / ROI_ZIP_NAME).exists())
 
     def run_eval(self):
-        if not self.project: return
-        self.btn_run.setEnabled(False); self.text.clear(); self.pbar.setValue(0)
-        self.worker=EvalWorker(self.project)
+        if not self.project:
+            return
+        self.btn_run.setEnabled(False)
+        self.text.clear()
+        self.pbar.setValue(0)
+        self.worker = EvalWorker(self.project)
         self.worker.progress.connect(self.pbar.setValue)
         self.worker.finished.connect(self.done)
         self.worker.error.connect(self.err)
@@ -359,24 +473,30 @@ class MainWindow(QMainWindow):
 
     def done(self, summary, fig1, fig2):
         self.text.setPlainText(summary)
-        self.canvas1.figure=fig1; self.canvas1.draw()
-        self.canvas2.figure=fig2; self.canvas2.draw()
-        self.btn_run.setEnabled(True); self.worker=None; self.pbar.setValue(100)
+        self.canvas1.figure = fig1
+        self.canvas1.draw()
+        self.canvas2.figure = fig2
+        self.canvas2.draw()
+        self.btn_run.setEnabled(True)
+        self.worker = None
+        self.pbar.setValue(100)
         QtCore.QTimer.singleShot(0, self._refresh_canvas_geometry)
 
     def _refresh_canvas_geometry(self):
         # FigureCanvas の sizeHint を再評価させ、Splitter を広げる
         for canvas in (self.canvas1, self.canvas2):
             dpi = canvas.figure.dpi
-            w   = canvas.width()  / dpi
-            h   = canvas.height() / dpi
+            w = canvas.width() / dpi
+            h = canvas.height() / dpi
             canvas.figure.set_size_inches(w, h, forward=True)
         self.canvas1.updateGeometry()
         self.canvas2.updateGeometry()
-        
+
     def err(self, msg):
-        QMessageBox.critical(self,"Error",msg)
-        self.btn_run.setEnabled(True); self.worker=None; self.pbar.setValue(0)
+        QMessageBox.critical(self, "Error", msg)
+        self.btn_run.setEnabled(True)
+        self.worker = None
+        self.pbar.setValue(0)
 
     def showEvent(self, event):
         print("showEvent")
@@ -391,8 +511,10 @@ class MainWindow(QMainWindow):
         self.canvas1.updateGeometry()
         self.canvas2.updateGeometry()
 
+
 # ------------ entry ------------
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    w   = MainWindow(); w.show()
+    w = MainWindow()
+    w.show()
     sys.exit(app.exec())

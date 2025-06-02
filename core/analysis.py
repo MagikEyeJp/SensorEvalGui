@@ -11,7 +11,7 @@ import logging
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import numpy as np
-from scipy.signal import savgol_filter
+from scipy.interpolate import UnivariateSpline
 import tifffile
 
 from utils import config as cfgutil
@@ -970,9 +970,9 @@ def calculate_dark_noise_gain(
 def _estimate_sat_from_snr(signal: np.ndarray, snr: np.ndarray) -> float:
     """Return DN level where the SNR curve drops sharply.
 
-    The function applies a Savitzky-Golay filter to the SNR values, computes the
-    second derivative, and locates the point with the maximum change starting
-    from the highest signal level.
+    The function applies a spline fit to the SNR values, computes the second
+    derivative, and locates the point with the maximum change starting from the
+    highest signal level.
 
     Parameters
     ----------
@@ -994,14 +994,12 @@ def _estimate_sat_from_snr(signal: np.ndarray, snr: np.ndarray) -> float:
     sig = np.asarray(signal, dtype=float)[idx]
     s = np.asarray(snr, dtype=float)[idx]
 
-    win = 5 if sig.size >= 5 else sig.size
-    if win % 2 == 0:
-        win -= 1
-    if win >= 3:
-        s = savgol_filter(s, win, 2, mode="interp")
-
-    d1 = np.gradient(s, sig)
-    d2 = np.gradient(d1, sig)
+    if sig.size >= 4:
+        spline = UnivariateSpline(sig, s, s=0.2, k=3)
+        d2 = spline.derivative(2)(sig)
+    else:
+        d1 = np.gradient(s, sig)
+        d2 = np.gradient(d1, sig)
 
     max_val = np.max(d2)
     idxs = np.where(np.isclose(d2, max_val, rtol=1e-6, atol=0.0))[0]
