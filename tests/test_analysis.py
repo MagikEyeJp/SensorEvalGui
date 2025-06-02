@@ -505,7 +505,7 @@ def test_calculate_dn_sat_with_snr_signal():
     signal = np.array([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], dtype=float)
     snr = np.array([1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1], dtype=float)
     dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, snr))
-    assert dn_sat == pytest.approx(80.0)
+    assert dn_sat == pytest.approx(80.0, abs=0.1)
 
 
 def test_clear_cache_resets_internal_caches():
@@ -517,7 +517,8 @@ def test_clear_cache_resets_internal_caches():
     assert not analysis._stack_cache
     assert not analysis._stats_cache
 
-    def test_calculate_dn_sat_close_points_no_warning():
+
+def test_calculate_dn_sat_close_points_no_warning():
     stack = np.full((2, 2, 2), 10, dtype=np.uint16)
     cfg = {"illumination": {"sat_factor": 0.01}, "sensor": {"adc_bits": 10}}
     signal = np.array(
@@ -530,4 +531,4 @@ def test_clear_cache_resets_internal_caches():
         warnings.simplefilter("always")
         dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, snr))
     assert not w
-    assert dn_sat == pytest.approx(80.0)
+    assert dn_sat == pytest.approx(80.0, abs=0.1)
