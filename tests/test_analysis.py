@@ -495,3 +495,12 @@ def test_calculate_dn_sat_uses_lsb_shift():
     dn_sat6 = analysis.calculate_dn_sat(stack, cfg6)
     assert dn_sat0 == pytest.approx(((1 << 10) - 1) * 0.95)
     assert dn_sat6 == pytest.approx(((1 << 10) - 1) * (1 << 6) * 0.95)
+
+
+def test_calculate_dn_sat_with_snr_signal():
+    stack = np.full((2, 2, 2), 10, dtype=np.uint16)
+    cfg = {"illumination": {"sat_factor": 0.01}, "sensor": {"adc_bits": 10}}
+    signal = np.array([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], dtype=float)
+    snr = np.array([1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1], dtype=float)
+    dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, snr))
+    assert dn_sat == pytest.approx(80.0)

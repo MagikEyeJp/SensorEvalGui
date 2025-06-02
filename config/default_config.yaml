@@ -79,3 +79,6 @@ output:
     - DN_sat
     - PRNU (%)
     - System Sensitivity
+
+logging:
+  level: INFO                   # DEBUG | INFO | WARNING | ERROR | CRITICAL

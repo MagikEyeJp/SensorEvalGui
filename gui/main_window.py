@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 
 from utils.config import load_config
 import utils.config as cfgutil
-from utils.logger import log_memory_usage
+from utils.logger import log_memory_usage, apply_logging_config
 
 # ensure only one pipeline runs at a time
 pipeline_lock = threading.Lock()
@@ -114,6 +114,7 @@ def run_pipeline(
     status: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, float]:
     """Run full analysis pipeline with logging and memory checks."""
+    apply_logging_config(cfg)
     logging.info("Pipeline start: %s", project)
     with pipeline_lock:
         try:
@@ -152,6 +153,7 @@ def run_pipeline(
             prnu_data = collect_prnu_points(prnu_stats)
 
             roi_table = extract_roi_table(project, cfg)
+            snr_signal_data = collect_gain_snr_signal(roi_table, cfg)
             flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
             flat_rects = load_rois(flat_roi_file)
 
@@ -214,7 +216,9 @@ def run_pipeline(
                         prnu_map_tmp,
                         gain_map_tmp,
                     )
-                    dn_sat = calculate_dn_sat(flat_stack, cfg)
+                    dn_sat = calculate_dn_sat(
+                        flat_stack, cfg, snr_signal_data.get(gain_db)
+                    )
                     first = False
 
                 # SNR metrics for this gain
@@ -299,7 +303,7 @@ def run_pipeline(
                 "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
             )
             exp_data = collect_mid_roi_snr(roi_table, mid_idx)
-            sig_data = collect_gain_snr_signal(roi_table, cfg)
+            sig_data = snr_signal_data
 
             logging.info("Plotting SNR vs Signal (multi)")
             log_memory_usage("before snr_signal plot: ")
@@ -510,6 +514,7 @@ class MainWindow(QMainWindow):
             )
             return
         self.config = load_config(cfg_path)
+        apply_logging_config(self.config)
         self.status.setText(f"Project loaded: {self.project_dir}")
         self.run_btn.setEnabled(True)
         self.run_analysis()
@@ -526,6 +531,7 @@ class MainWindow(QMainWindow):
             return
         # reload configuration fresh each run to avoid stale values
         self.config = load_config(cfg_path)
+        apply_logging_config(self.config)
         if self.worker is not None:
             return
         self.run_btn.setEnabled(False)
