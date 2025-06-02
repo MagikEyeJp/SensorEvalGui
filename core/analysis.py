@@ -73,7 +73,13 @@ def _mask_from_rects(
     return mask
 
 
-def _gain_fit_mask(stack: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
+def _gain_fit_mask(
+    stack: np.ndarray,
+    cfg: Dict[str, Any],
+    *,
+    snr_signal: tuple[np.ndarray, np.ndarray] | None = None,
+    dn_sat: float | None = None,
+) -> np.ndarray:
     """Return mask for gain-map fitting using ``stack`` and config margins."""
 
     proc = cfg.get("processing", {})
@@ -83,7 +89,8 @@ def _gain_fit_mask(stack: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
         return np.ones(stack.shape[1:], bool)
 
     mean_frame = np.mean(stack, axis=0)
-    dn_sat = calculate_dn_sat(stack, cfg)
+    if dn_sat is None:
+        dn_sat = calculate_dn_sat(stack, cfg, snr_signal)
     lo = 0.0 if lower is None else float(lower)
     hi = float("inf") if upper is None else float(upper)
     return (mean_frame >= lo * dn_sat) & (mean_frame <= hi * dn_sat)
@@ -355,6 +362,9 @@ def get_gain_map(
     project_dir: Path | str | None = None,
     gain_db: float | None = None,
     stack: np.ndarray | None = None,
+    *,
+    snr_signal: tuple[np.ndarray, np.ndarray] | None = None,
+    dn_sat: float | None = None,
 ) -> np.ndarray | None:
     """Return gain map according to ``cfg['processing']['gain_map_mode']``.
 
@@ -372,6 +382,12 @@ def get_gain_map(
     stack:
         Image stack used when the mode is ``self_fit`` or to avoid reloading
         reference flats.
+    snr_signal:
+        Optional tuple of ``(signal, snr)`` arrays used to estimate ``dn_sat``
+        when clipping margins are applied.
+    dn_sat:
+        Precomputed saturation level. If ``None``, it is calculated as needed
+        using ``snr_signal``.
 
     Returns
     -------
@@ -430,18 +446,21 @@ def get_gain_map(
 
     clip_margin = bool(cfg.get("processing", {}).get("gain_clip_margin", False))
 
+    dn_sat_val = dn_sat
+
     if clip_margin:
         proc = cfg.get("processing", {})
         lower = proc.get("mask_lower_margin")
         upper = proc.get("mask_upper_margin")
         if lower is not None or upper is not None:
-            dn_sat = calculate_dn_sat(stack, cfg)
-            lo = 0.0 if lower is None else float(lower) * dn_sat
-            hi = float("inf") if upper is None else float(upper) * dn_sat
+            if dn_sat_val is None:
+                dn_sat_val = calculate_dn_sat(stack, cfg, snr_signal)
+            lo = 0.0 if lower is None else float(lower) * dn_sat_val
+            hi = float("inf") if upper is None else float(upper) * dn_sat_val
             mean_src = np.clip(mean_src, lo, hi)
         mask = np.ones_like(mean_src, bool)
     elif mask is None:
-        mask = _gain_fit_mask(stack, cfg)
+        mask = _gain_fit_mask(stack, cfg, snr_signal=snr_signal, dn_sat=dn_sat_val)
 
     if mode == "flat_frame":
         gain_map = mean_src
@@ -1083,6 +1102,9 @@ def calculate_pseudo_prnu(
     rects: list[tuple[int, int, int, int]] | None = None,
     project_dir: Path | str | None = None,
     gain_db: float | None = None,
+    *,
+    snr_signal: tuple[np.ndarray, np.ndarray] | None = None,
+    dn_sat: float | None = None,
 ) -> Tuple[float, np.ndarray]:
     """Estimate pseudo-PRNU within the specified ROI.
 
@@ -1094,6 +1116,12 @@ def calculate_pseudo_prnu(
         Parsed configuration dictionary.
     rects:
         Optional list of ROI rectangles ``(left, top, width, height)``.
+    snr_signal:
+        Optional ``(signal, snr)`` tuple used to estimate ``dn_sat`` when
+        applying mask margins.
+    dn_sat:
+        Precomputed saturation level. If ``None``, calculated from
+        ``snr_signal`` as needed.
 
     Returns
     -------
@@ -1109,9 +1137,11 @@ def calculate_pseudo_prnu(
 
     mean_frame = np.mean(flat_stack, axis=0)
     margin = cfg.get("processing", {}).get("mask_upper_margin")
+    dn_sat_val = dn_sat
     if margin is not None:
-        dn_sat = calculate_dn_sat(flat_stack, cfg)
-        mask &= mean_frame <= margin * dn_sat
+        if dn_sat_val is None:
+            dn_sat_val = calculate_dn_sat(flat_stack, cfg, snr_signal)
+        mask &= mean_frame <= margin * dn_sat_val
 
     logging.debug(
         "PRNU residual: initial mean=%.3g min=%.3g max=%.3g",
@@ -1132,6 +1162,8 @@ def calculate_pseudo_prnu(
             if mode == "self_fit" or project_dir is None or gain_db is None
             else None
         ),
+        snr_signal=snr_signal,
+        dn_sat=dn_sat_val,
     )
 
     if gain_map is not None:
@@ -1154,6 +1186,9 @@ def calculate_gain_map(
     rects: list[tuple[int, int, int, int]] | None = None,
     project_dir: Path | str | None = None,
     gain_db: float | None = None,
+    *,
+    snr_signal: tuple[np.ndarray, np.ndarray] | None = None,
+    dn_sat: float | None = None,
 ) -> np.ndarray | None:
     """Return gain map using flat-field stack and configuration."""
 
@@ -1164,6 +1199,8 @@ def calculate_gain_map(
         project_dir=project_dir,
         gain_db=gain_db,
         stack=flat_stack,
+        snr_signal=snr_signal,
+        dn_sat=dn_sat,
     )
 
 
@@ -1173,6 +1210,9 @@ def calculate_prnu_residual(
     rects: list[tuple[int, int, int, int]] | None = None,
     project_dir: Path | str | None = None,
     gain_db: float | None = None,
+    *,
+    snr_signal: tuple[np.ndarray, np.ndarray] | None = None,
+    dn_sat: float | None = None,
 ) -> Tuple[float, np.ndarray]:
     """Calculate PRNU residual from a flat-field stack.
 
@@ -1184,6 +1224,11 @@ def calculate_prnu_residual(
         Parsed configuration dictionary.
     rects:
         Optional ROI rectangles ``(left, top, width, height)``.
+    snr_signal:
+        Optional ``(signal, snr)`` tuple to estimate ``dn_sat`` when needed.
+    dn_sat:
+        Precomputed saturation level. If ``None``, it is calculated using
+        ``snr_signal`` when required.
 
     Returns
     -------
@@ -1199,9 +1244,11 @@ def calculate_prnu_residual(
 
     mean_frame = np.mean(flat_stack, axis=0)
     margin = cfg.get("processing", {}).get("mask_upper_margin")
+    dn_sat_val = dn_sat
     if margin is not None:
-        dn_sat = calculate_dn_sat(flat_stack, cfg)
-        mask &= mean_frame <= margin * dn_sat
+        if dn_sat_val is None:
+            dn_sat_val = calculate_dn_sat(flat_stack, cfg, snr_signal)
+        mask &= mean_frame <= margin * dn_sat_val
 
     mode = cfg.get("processing", {}).get("gain_map_mode", "none")
 
@@ -1215,6 +1262,8 @@ def calculate_prnu_residual(
             if mode == "self_fit" or project_dir is None or gain_db is None
             else None
         ),
+        snr_signal=snr_signal,
+        dn_sat=dn_sat_val,
     )
 
     if gain_map is not None:
