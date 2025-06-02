@@ -102,11 +102,11 @@ def test_collect_gain_snr_signal_rows():
         },
     ]
     cfg = {"processing": {"exclude_abnormal_snr": False, "min_sig_factor": 0}}
-    data = analysis.collect_gain_snr_signal(rows, cfg)
+    data = analysis.collect_gain_snr_signal(rows, cfg, {0.0: 1.0})
     assert 0.0 in data
     sig, snr = data[0.0]
     assert np.allclose(sig, [10.0, 20.0])
-    assert np.allclose(snr, [10.0, 10.0])
+    assert np.allclose(snr, [9.0, 9.5])
 
 
 def test_extract_roi_stats_mid_index(tmp_path):

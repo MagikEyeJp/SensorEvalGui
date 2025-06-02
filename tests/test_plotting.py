@@ -31,7 +31,12 @@ def test_plot_snr_vs_signal_multi(tmp_path):
         0.0: (np.array([1.0, 2.0]), np.array([2.0, 4.0])),
         6.0: (np.array([1.5, 3.0]), np.array([1.0, 2.0])),
     }
-    plotting.plot_snr_vs_signal_multi(data, {}, tmp_path / "multi.png")
+    plotting.plot_snr_vs_signal_multi(
+        data,
+        {},
+        tmp_path / "multi.png",
+        black_levels={0.0: 0.0, 6.0: 0.0},
+    )
     assert (tmp_path / "multi.png").is_file()
 
 
@@ -40,14 +45,24 @@ def test_plot_snr_vs_signal_multi_single_point(tmp_path):
         0.0: (np.array([1.0]), np.array([2.0])),
         6.0: (np.array([1.1]), np.array([2.2])),
     }
-    plotting.plot_snr_vs_signal_multi(data, {}, tmp_path / "single_multi.png")
+    plotting.plot_snr_vs_signal_multi(
+        data,
+        {},
+        tmp_path / "single_multi.png",
+        black_levels={0.0: 0.0, 6.0: 0.0},
+    )
     assert (tmp_path / "single_multi.png").is_file()
 
 
 def test_plot_snr_vs_signal_multi_derivative(tmp_path):
     data = {0.0: (np.array([1.0, 2.0, 3.0]), np.array([2.0, 4.0, 6.0]))}
     fig = plotting.plot_snr_vs_signal_multi(
-        data, {}, tmp_path / "deriv.png", return_fig=True, show_derivative=True
+        data,
+        {},
+        tmp_path / "deriv.png",
+        return_fig=True,
+        show_derivative=True,
+        black_levels={0.0: 0.0},
     )
     assert (tmp_path / "deriv.png").is_file()
     assert len(fig.axes) == 2
@@ -61,6 +76,7 @@ def test_plot_snr_vs_signal_multi_interp(tmp_path):
         tmp_path / "interp.png",
         return_fig=True,
         interp_points=5,
+        black_levels={0.0: 0.0},
     )
     assert (tmp_path / "interp.png").is_file()
     assert len(fig.axes[0].lines[0].get_xdata()) == 2
@@ -69,7 +85,12 @@ def test_plot_snr_vs_signal_multi_interp(tmp_path):
 def test_plot_snr_vs_signal_multi_invalid(tmp_path):
     data = {0.0: (np.array([1.0]), np.array([-1.0]))}
     with pytest.raises(ValueError):
-        plotting.plot_snr_vs_signal_multi(data, {}, tmp_path / "bad.png")
+        plotting.plot_snr_vs_signal_multi(
+            data,
+            {},
+            tmp_path / "bad.png",
+            black_levels={0.0: 0.0},
+        )
 
 
 def test_plot_roi_area(tmp_path):

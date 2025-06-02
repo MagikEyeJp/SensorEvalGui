@@ -159,8 +159,15 @@ def run_pipeline(
 
             prnu_data = collect_prnu_points(prnu_stats)
 
+            black_levels: Dict[float, float] = {}
+            for gain_db, _ in cfgutil.gain_entries(cfg):
+                _, _, _, _, bl = calculate_dark_noise_gain(
+                    project, gain_db, cfg, status=status
+                )
+                black_levels[gain_db] = bl
+
             roi_table = extract_roi_table(project, cfg)
-            snr_signal_data = collect_gain_snr_signal(roi_table, cfg)
+            snr_signal_data = collect_gain_snr_signal(roi_table, cfg, black_levels)
             flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
             flat_rects = load_rois(flat_roi_file)
 
@@ -337,8 +344,14 @@ def run_pipeline(
                     (1 << int(cfg.get("sensor", {}).get("adc_bits", 16)))
                     * (1 << int(cfg.get("sensor", {}).get("lsb_shift", 0)))
                 ),
+                black_levels=black_levels,
             )
-            save_snr_signal_json(sig_data, cfg, out_dir / "snr_signal.json")
+            save_snr_signal_json(
+                sig_data,
+                cfg,
+                out_dir / "snr_signal.json",
+                black_levels=black_levels,
+            )
             log_memory_usage("after snr_signal plot: ")
 
             logging.info("Plotting SNR vs Exposure")

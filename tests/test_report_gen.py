@@ -53,7 +53,7 @@ def test_save_snr_signal_json(tmp_path):
 
     data = {0.0: (np.array([1.0, 2.0]), np.array([2.0, 4.0]))}
     out_file = tmp_path / "snr.json"
-    save_snr_signal_json(data, cfg, out_file)
+    save_snr_signal_json(data, cfg, out_file, black_levels={0.0: 0.5})
     txt = json.loads(out_file.read_text(encoding="utf-8"))
     assert "0" in txt
     assert txt["0"]["signal"][0] == pytest.approx(1.0)

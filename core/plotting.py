@@ -197,6 +197,7 @@ def plot_snr_vs_signal_multi(
     return_fig: bool = False,
     show_derivative: bool = False,
     interp_points: int | None = None,
+    black_levels: Dict[float, float] | None = None,
 ) -> Figure | None:
     """Plot SNR–Signal curves for multiple gains.
 
@@ -237,9 +238,10 @@ def plot_snr_vs_signal_multi(
             label=f"{gain:g}dB",
         )
 
-        rn = analysis.fit_clipped_snr_model(sig, snr, adc_full_scale)
+        bl = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
+        rn = analysis.fit_clipped_snr_model(sig, snr, adc_full_scale, black_level=bl)
         xs = np.linspace(float(sig.min()), float(sig.max()), 200)
-        snr_fit = analysis.clipped_snr_model(xs, rn, adc_full_scale)
+        snr_fit = analysis.clipped_snr_model(xs, rn, adc_full_scale, black_level=bl)
         ax_snr.loglog(
             xs, 20 * np.log10(snr_fit), linestyle="-", color=color, label="_nolegend_"
         )
