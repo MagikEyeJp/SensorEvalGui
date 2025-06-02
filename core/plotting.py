@@ -227,7 +227,7 @@ def plot_snr_vs_signal_multi(
             sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
             snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
         all_signals.append(sig)
-        color = next(ax_snr._get_lines.prop_cycler)["color"]
+        color = ax_snr._get_lines.get_next_color()
         ax_snr.loglog(
             sig,
             20 * np.log10(snr),
