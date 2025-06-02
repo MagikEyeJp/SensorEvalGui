@@ -532,3 +532,12 @@ def test_calculate_dn_sat_close_points_no_warning():
         dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, snr))
     assert not w
     assert dn_sat == pytest.approx(80.0, abs=0.1)
+
+
+def test_clipped_snr_model_black_level_effect():
+    sig = np.array([40.0, 50.0, 60.0])
+    snr_no_bl = analysis.clipped_snr_model(sig, 1.0, 100.0)
+    snr_bl = analysis.clipped_snr_model(sig, 1.0, 100.0, black_level=50.0)
+    assert snr_bl[0] > 1e6
+    assert snr_bl[0] > snr_bl[1]
+    assert snr_no_bl[0] < snr_no_bl[1]

@@ -1512,30 +1512,41 @@ def calculate_dn_at_snr_one(signal: np.ndarray, snr_lin: np.ndarray) -> float:
 
 
 def clipped_snr_model(
-    signal: np.ndarray, read_noise: float, adc_full_scale: float
+    signal: np.ndarray,
+    read_noise: float,
+    adc_full_scale: float,
+    black_level: float = 0.0,
 ) -> np.ndarray:
-    """Return SNR curve accounting for ADC clipping at 0 and full scale."""
+    """Return SNR curve accounting for ADC clipping and black level."""
 
     from scipy.stats import norm
 
-    sig = np.asarray(signal, dtype=float)
-    sigma = np.sqrt(sig + read_noise**2)
-    alpha = -sig / sigma
-    beta = (adc_full_scale - sig) / sigma
+    sig = np.asarray(signal, dtype=float) - black_level
+    sig_pos = np.maximum(sig, 0.0)
+    sigma = np.sqrt(sig_pos + read_noise**2)
+    alpha = (0.0 - sig) / sigma
+    beta = (adc_full_scale - black_level - sig) / sigma
     cdf = norm.cdf
     pdf = norm.pdf
     with np.errstate(divide="ignore", invalid="ignore"):
         z = cdf(beta) - cdf(alpha)
         a = pdf(alpha)
         b = pdf(beta)
-        var = sigma**2 * (1.0 + (alpha * a - beta * b) / z - ((a - b) / z) ** 2)
+        mean_adj = (a - b) / z
+        var = 1.0 + (alpha * a - beta * b) / z - mean_adj**2
+    mean = sig + sigma * mean_adj
+    var = sigma**2 * var
     var = np.where(z <= 0, 0.0, var)
     noise = np.sqrt(var)
-    return sig / np.maximum(noise, 1e-6)
+    mean = np.clip(mean, 0.0, adc_full_scale - black_level)
+    return mean / np.maximum(noise, 1e-6)
 
 
 def fit_clipped_snr_model(
-    signal: np.ndarray, snr: np.ndarray, adc_full_scale: float
+    signal: np.ndarray,
+    snr: np.ndarray,
+    adc_full_scale: float,
+    black_level: float = 0.0,
 ) -> float:
     """Fit :func:`clipped_snr_model` and return estimated read noise."""
 
@@ -1543,7 +1554,7 @@ def fit_clipped_snr_model(
     snr = np.asarray(snr, dtype=float)
 
     def _model(x: np.ndarray, r: float) -> np.ndarray:
-        return clipped_snr_model(x, r, adc_full_scale)
+        return clipped_snr_model(x, r, adc_full_scale, black_level)
 
     try:
         popt, _ = curve_fit(
