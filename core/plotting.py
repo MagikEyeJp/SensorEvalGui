@@ -14,7 +14,7 @@ from matplotlib.figure import Figure
 import numpy as np
 
 from utils.logger import log_memory_usage
-from scipy.signal import savgol_filter
+from scipy.interpolate import UnivariateSpline
 
 from utils import config as cfgutil
 
@@ -51,7 +51,7 @@ def _smooth_and_second_derivative(
     poly: int = 2,
     interp_points: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return smoothed SNR and its second derivative using Savitzky-Golay.
+    """Return smoothed SNR and its second derivative using a spline fit.
 
     When ``interp_points`` is provided and greater than ``signal.size``, the
     ``signal`` and ``snr`` arrays are linearly interpolated to that length before
@@ -69,16 +69,15 @@ def _smooth_and_second_derivative(
         sig = xs
         s = ys
 
-    win = min(window, sig.size if sig.size % 2 else sig.size - 1)
-    if win < poly + 2 or win < 3:
-        s_smooth = s
+    if sig.size >= 4:
+        spline = UnivariateSpline(sig, s, s=0.2, k=min(poly + 1, 5))
+        s_smooth = spline(sig)
+        d2 = spline.derivative(2)(sig)
     else:
-        if win % 2 == 0:
-            win -= 1
-        s_smooth = savgol_filter(s, win, poly, mode="interp")
+        s_smooth = s
+        d1 = np.gradient(s_smooth, sig)
+        d2 = np.gradient(d1, sig)
 
-    d1 = np.gradient(s_smooth, sig)
-    d2 = np.gradient(d1, sig)
     return sig, s_smooth, d2
 
 
