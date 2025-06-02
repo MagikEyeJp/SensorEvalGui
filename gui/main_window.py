@@ -616,7 +616,7 @@ class MainWindow(QMainWindow):
                 widget = self._create_canvas(figs_to_use)
                 self.graph_tabs.addTab(widget, title)
 
-        self.resize(640, self.height())
+        # self.resize(640, self.height())
         h = self.splitter.height()
         self.splitter.setSizes([int(h * 0.25), int(h * 0.75)])
         self._refresh_canvas_geometry()
