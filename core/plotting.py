@@ -14,6 +14,7 @@ from matplotlib.figure import Figure
 import numpy as np
 
 from utils.logger import log_memory_usage
+from scipy.signal import savgol_filter
 
 from utils import config as cfgutil
 
@@ -44,18 +45,22 @@ def _auto_labels(ratios: Sequence[float]) -> list[str]:
 
 
 def _smooth_and_second_derivative(
-    signal: np.ndarray, snr: np.ndarray, window: int = 3
+    signal: np.ndarray, snr: np.ndarray, window: int = 5, poly: int = 2
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return smoothed SNR and its second derivative."""
+    """Return smoothed SNR and its second derivative using Savitzky-Golay."""
+
     idx = np.argsort(signal)
     sig = np.asarray(signal, dtype=float)[idx]
     s = np.asarray(snr, dtype=float)[idx]
-    win = max(1, min(window, sig.size))
-    if win > 1:
-        kernel = np.ones(win) / win
-        s_smooth = np.convolve(s, kernel, mode="same")
-    else:
+
+    win = min(window, sig.size if sig.size % 2 else sig.size - 1)
+    if win < poly + 2 or win < 3:
         s_smooth = s
+    else:
+        if win % 2 == 0:
+            win -= 1
+        s_smooth = savgol_filter(s, win, poly, mode="interp")
+
     d1 = np.gradient(s_smooth, sig)
     d2 = np.gradient(d1, sig)
     return sig, s_smooth, d2
