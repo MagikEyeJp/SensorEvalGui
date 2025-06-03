@@ -240,9 +240,17 @@ def plot_snr_vs_signal_multi(
         )
 
         bl = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
-        rn = analysis.fit_clipped_snr_model(sig, snr, adc_full_scale, black_level=bl)
+        rn, ln = analysis.fit_clipped_snr_model(
+            sig, snr, adc_full_scale, black_level=bl
+        )
         xs = np.linspace(float(sig.min()), float(sig.max()), 200)
-        snr_fit = analysis.clipped_snr_model(xs, rn, adc_full_scale, black_level=bl)
+        snr_fit = analysis.clipped_snr_model(
+            xs,
+            rn,
+            adc_full_scale,
+            black_level=bl,
+            limit_noise=ln,
+        )
         ax_snr.loglog(
             xs, 20 * np.log10(snr_fit), linestyle="-", color=color, label="_nolegend_"
         )
