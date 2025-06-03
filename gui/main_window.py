@@ -56,6 +56,7 @@ from core.analysis import (
     calculate_system_sensitivity,
     collect_mid_roi_snr,
     collect_gain_snr_signal,
+    collect_gain_noise_signal,
     collect_prnu_points,
     calculate_dn_at_snr,
     calculate_snr_at_half,
@@ -66,6 +67,7 @@ from core.analysis import (
 )
 from core.plotting import (
     plot_snr_vs_signal_multi,
+    plot_noise_vs_signal_multi,
     plot_snr_vs_exposure,
     plot_prnu_regression,
     plot_heatmap,
@@ -168,6 +170,7 @@ def run_pipeline(
 
             roi_table = extract_roi_table(project, cfg)
             snr_signal_data = collect_gain_snr_signal(roi_table, cfg, black_levels)
+            noise_signal_data = collect_gain_noise_signal(roi_table, cfg, black_levels)
             flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
             flat_rects = load_rois(flat_roi_file)
 
@@ -354,6 +357,15 @@ def run_pipeline(
             )
             log_memory_usage("after snr_signal plot: ")
 
+            logging.info("Plotting Noise vs Signal (multi)")
+            fig_noise_signal = plot_noise_vs_signal_multi(
+                noise_signal_data,
+                cfg,
+                out_dir / "noise_signal.png",
+                return_fig=True,
+            )
+            log_memory_usage("after noise_signal plot: ")
+
             logging.info("Plotting SNR vs Exposure")
             log_memory_usage("before snr_exposure plot: ")
             fig_snr_exposure = plot_snr_vs_exposure(
@@ -449,6 +461,7 @@ def run_pipeline(
 
             graphs = {
                 "snr_signal": out_dir / "snr_signal.png",
+                "noise_signal": out_dir / "noise_signal.png",
                 "snr_exposure": out_dir / "snr_exposure.png",
                 "prnu_fit": out_dir / "prnu_fit.png",
                 "dsnu_map": out_dir / "dsnu_map.png",
@@ -462,6 +475,7 @@ def run_pipeline(
             }
             figures = {
                 "snr_signal": fig_snr_signal,
+                "noise_signal": fig_noise_signal,
                 "snr_exposure": fig_snr_exposure,
                 "prnu_fit": fig_prnu_fit,
                 "dsnu_map": fig_dsnu_map,
@@ -618,7 +632,7 @@ class MainWindow(QMainWindow):
         self.graph_tabs.clear()
 
         graph_groups = {
-            "SNR-Signal": ["snr_signal"],
+            "SNR-Signal": ["snr_signal", "noise_signal"],
             "SNR-Exposure": ["snr_exposure"],
             "PRNU Fit": ["prnu_fit"],
             "DSNU Map": ["dsnu_map", "dsnu_map_scaled"],

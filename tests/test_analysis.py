@@ -109,6 +109,28 @@ def test_collect_gain_snr_signal_rows():
     assert np.allclose(snr, [9.0, 9.5])
 
 
+def test_collect_gain_noise_signal_rows():
+    rows = [
+        {
+            "Gain (dB)": 0.0,
+            "Exposure": 1.0,
+            "Mean": 10.0,
+            "Std": 1.0,
+        },
+        {
+            "Gain (dB)": 0.0,
+            "Exposure": 2.0,
+            "Mean": 20.0,
+            "Std": 2.0,
+        },
+    ]
+    cfg = {}
+    data = analysis.collect_gain_noise_signal(rows, cfg)
+    sig, noise = data[0.0]
+    assert np.allclose(sig, [10.0, 20.0])
+    assert np.allclose(noise, [1.0, 2.0])
+
+
 def test_extract_roi_stats_mid_index(tmp_path):
     def _roiread_multi(path):
         class _R:

@@ -33,6 +33,7 @@ __all__ = [
     "calculate_system_sensitivity",
     "collect_mid_roi_snr",
     "collect_gain_snr_signal",
+    "collect_gain_noise_signal",
     "collect_prnu_points",
     "calculate_dn_at_snr",
     "calculate_snr_at_half",
@@ -801,6 +802,30 @@ def collect_gain_snr_signal(
         items.sort(key=lambda x: x[0])
         sig, s = zip(*items)
         res[gain] = (np.array(sig), np.array(s))
+    return res
+
+
+def collect_gain_noise_signal(
+    rows: List[Dict[str, Any]],
+    cfg: Dict[str, Any],
+    black_levels: Dict[float, float] | None = None,
+) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
+    """Return noise curves indexed by signal level for each gain using ROI rows."""
+
+    data: Dict[float, list[tuple[float, float]]] = {}
+    for row in rows:
+        mean = float(row.get("Mean", 0.0))
+        std = float(row.get("Std", 0.0))
+        if std == 0:
+            continue
+        gain = float(row.get("Gain (dB)", 0.0))
+        data.setdefault(gain, []).append((mean, std))
+
+    res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
+    for gain, items in data.items():
+        items.sort(key=lambda x: x[0])
+        sig, n = zip(*items)
+        res[gain] = (np.array(sig), np.array(n))
     return res
 
 

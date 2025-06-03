@@ -27,6 +27,7 @@ __all__ = [
     "plot_prnu_regression",
     "plot_heatmap",
     "plot_roi_area",
+    "plot_noise_vs_signal_multi",
 ]
 
 
@@ -282,6 +283,39 @@ def plot_snr_vs_signal_multi(
         return fig
     plt.close(fig)
     log_memory_usage("plot end: ")
+    return None
+
+
+def plot_noise_vs_signal_multi(
+    data: Dict[float, tuple[np.ndarray, np.ndarray]],
+    cfg: Dict[str, Any],
+    output_path: Path,
+    *,
+    return_fig: bool = False,
+) -> Figure | None:
+    """Plot Noise–Signal curves for multiple gains."""
+
+    logging.info("plot_noise_vs_signal_multi: output=%s", output_path)
+    fig, ax = plt.subplots()
+
+    for gain, (sig, noise) in sorted(data.items()):
+        sig = _validate_positive_finite(sig, "signal")
+        noise = _validate_positive_finite(noise, "noise")
+        if sig.size == 1 or noise.size == 1:
+            sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
+            noise = np.asarray([noise[0] * 0.9, noise[0] * 1.1])
+        ax.loglog(sig, noise, marker="o", linestyle="-", label=f"{gain:g}dB")
+
+    ax.set_xlabel("Signal (DN)")
+    ax.set_ylabel("Noise (DN)")
+    ax.set_title("Noise vs Signal")
+    ax.grid(True, which="both")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_path)
+    if return_fig:
+        return fig
+    plt.close(fig)
     return None
 
 

@@ -164,7 +164,7 @@ def report_html(
     html.append(summary_text)
     html.append("</pre>")
     groups = [
-        ("snr_signal",),
+        ("snr_signal", "noise_signal"),
         ("snr_exposure",),
         ("prnu_fit",),
         ("dsnu_map", "dsnu_map_scaled"),
