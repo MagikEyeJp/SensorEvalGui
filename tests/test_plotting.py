@@ -93,6 +93,21 @@ def test_plot_snr_vs_signal_multi_invalid(tmp_path):
         )
 
 
+def test_plot_noise_vs_signal_multi(tmp_path):
+    data = {
+        0.0: (np.array([1.0, 2.0]), np.array([0.5, 1.0])),
+        6.0: (np.array([1.5, 3.0]), np.array([0.7, 1.4])),
+    }
+    plotting.plot_noise_vs_signal_multi(data, {}, tmp_path / "noise.png")
+    assert (tmp_path / "noise.png").is_file()
+
+
+def test_plot_noise_vs_signal_multi_invalid(tmp_path):
+    data = {0.0: (np.array([1.0, -2.0]), np.array([0.5, 1.0]))}
+    with pytest.raises(ValueError):
+        plotting.plot_noise_vs_signal_multi(data, {}, tmp_path / "bad2.png")
+
+
 def test_plot_roi_area(tmp_path):
     img = np.zeros((4, 4))
     rects = [[(0, 0, 2, 2)], [(1, 1, 2, 2)], []]
