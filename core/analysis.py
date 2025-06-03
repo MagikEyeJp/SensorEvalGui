@@ -1529,16 +1529,30 @@ def clipped_snr_model(
     read_noise: float,
     adc_full_scale: float,
     black_level: float = 0.0,
+    *,
+    limit_noise: float = 0.0,
+    limit_margin: float = 0.05,
 ) -> np.ndarray:
-    """Return SNR curve accounting for ADC clipping and black level."""
+    """Return SNR curve accounting for ADC clipping and black level.
+
+    Additional ``limit_noise`` can be injected only when the signal is close to
+    ``black_level`` or ``adc_full_scale``. The affected region is controlled by
+    ``limit_margin`` which specifies the fraction of the usable range.
+    """
 
     from scipy.stats import norm
 
     sig = np.asarray(signal, dtype=float) - black_level
     sig_pos = np.maximum(sig, 0.0)
-    sigma = np.sqrt(sig_pos + read_noise**2)
+    range_val = adc_full_scale - black_level
+    if limit_noise > 0.0 and limit_margin > 0.0:
+        margin = limit_margin * range_val
+        edge_mask = (sig_pos < margin) | ((range_val - sig_pos) < margin)
+    else:
+        edge_mask = np.zeros_like(sig_pos, dtype=bool)
+    sigma = np.sqrt(sig_pos + read_noise**2 + (limit_noise**2) * edge_mask)
     alpha = (0.0 - sig) / sigma
-    beta = (adc_full_scale - black_level - sig) / sigma
+    beta = (range_val - sig) / sigma
     cdf = norm.cdf
     pdf = norm.pdf
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -1560,8 +1574,16 @@ def fit_clipped_snr_model(
     snr: np.ndarray,
     adc_full_scale: float,
     black_level: float = 0.0,
+    *,
+    limit_noise: float = 0.0,
+    limit_margin: float = 0.05,
 ) -> float:
-    """Fit :func:`clipped_snr_model` and return estimated read noise."""
+    """Fit :func:`clipped_snr_model` and return estimated read noise.
+
+    ``limit_noise`` and ``limit_margin`` are passed to
+    :func:`clipped_snr_model` but are not optimized. They allow injecting extra
+    noise only near the signal limits.
+    """
 
     signal = np.asarray(signal, dtype=float)
     snr = np.asarray(snr, dtype=float)
@@ -1574,7 +1596,14 @@ def fit_clipped_snr_model(
     # than measurement errors, so include all finite samples in the fit.
 
     def _model(x: np.ndarray, r: float) -> np.ndarray:
-        return clipped_snr_model(x, r, adc_full_scale, black_level)
+        return clipped_snr_model(
+            x,
+            r,
+            adc_full_scale,
+            black_level,
+            limit_noise=limit_noise,
+            limit_margin=limit_margin,
+        )
 
     try:
         popt, _ = curve_fit(

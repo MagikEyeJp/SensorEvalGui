@@ -541,3 +541,14 @@ def test_clipped_snr_model_black_level_effect():
     assert snr_bl[0] > 1e6
     assert snr_bl[0] > snr_bl[1]
     assert snr_no_bl[0] < snr_no_bl[1]
+
+
+def test_clipped_snr_model_limit_noise_effect():
+    sig = np.array([5.0, 50.0, 95.0])
+    snr_base = analysis.clipped_snr_model(sig, 1.0, 100.0)
+    snr_lim = analysis.clipped_snr_model(
+        sig, 1.0, 100.0, limit_noise=5.0, limit_margin=0.1
+    )
+    assert snr_lim[0] < snr_base[0]
+    assert snr_lim[1] == pytest.approx(snr_base[1])
+    assert snr_lim[2] < snr_base[2]
