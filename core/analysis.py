@@ -761,7 +761,9 @@ def extract_roi_table(
 
 
 def collect_mid_roi_snr(
-    rows: List[Dict[str, Any]], mid_index: int
+    rows: List[Dict[str, Any]],
+    mid_index: int,
+    black_levels: Dict[float, float] | None = None,
 ) -> Dict[float, tuple[np.ndarray, np.ndarray]]:
     """Return SNR curves for the grayscale ROI at ``mid_index``.
 
@@ -787,7 +789,8 @@ def collect_mid_roi_snr(
         std = float(row["Std"])
         if std == 0:
             continue
-        data.setdefault(gain, []).append((ratio, mean / std))
+        black = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
+        data.setdefault(gain, []).append((ratio, (mean - black) / std))
 
     res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
     for gain, items in data.items():

@@ -149,6 +149,24 @@ def test_collect_gain_noise_signal_rows():
     assert np.allclose(noise, [1.0, 2.0])
 
 
+def test_collect_mid_roi_snr_black_level():
+    rows = [
+        {
+            "ROI Type": "grayscale",
+            "ROI No": 1,
+            "Gain (dB)": 0.0,
+            "Exposure": 1.0,
+            "Mean": 10.0,
+            "Std": 2.0,
+        }
+    ]
+    data = analysis.collect_mid_roi_snr(rows, 1, {0.0: 2.0})
+    assert 0.0 in data
+    r, snr = data[0.0]
+    assert np.allclose(r, [1.0])
+    assert np.allclose(snr, [(10.0 - 2.0) / 2.0])
+
+
 def test_extract_roi_stats_mid_index(tmp_path):
     def _roiread_multi(path):
         class _R:
