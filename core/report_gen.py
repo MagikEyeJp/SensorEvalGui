@@ -71,8 +71,7 @@ def save_summary_txt(
         lines.append(f"ADC Bits: {adc_bits}")
         lines.append(f"LSB Shift: {lsb_shift}")
         if adc_bits > 0:
-            full_scale = ((1 << adc_bits) - 1) * (1 << lsb_shift)
-            lines.append(f"ADC Full Scale (DN): {full_scale}")
+            lines.append(f"ADC Full Scale (DN): {cfgutil.adc_full_scale(cfg)}")
         lines.append("")
 
         if summary:
@@ -210,9 +209,7 @@ def save_snr_signal_json(
     flag = cfg.get("output", {}).get("snr_signal_data", False)
 
     def writer(p: Path) -> None:
-        adc_bits = int(cfg.get("sensor", {}).get("adc_bits", 16))
-        lsb_shift = int(cfg.get("sensor", {}).get("lsb_shift", 0))
-        full_scale = ((1 << adc_bits) - 1) * (1 << lsb_shift)
+        full_scale = cfgutil.adc_full_scale(cfg)
         out: Dict[str, Any] = {}
         for gain, (sig, snr) in sorted(data.items()):
             bl = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))

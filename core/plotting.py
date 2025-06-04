@@ -214,9 +214,7 @@ def plot_snr_vs_signal_multi(
     else:
         fig, ax_snr = plt.subplots()
 
-    adc_bits = int(cfg.get("sensor", {}).get("adc_bits", 16))
-    lsb_shift = int(cfg.get("sensor", {}).get("lsb_shift", 0))
-    adc_full_scale = ((1 << adc_bits) - 1) * (1 << lsb_shift)
+    adc_full_scale = cfgutil.adc_full_scale(cfg)
 
     all_signals = []
     for gain, (sig, snr) in sorted(data.items()):

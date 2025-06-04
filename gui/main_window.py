@@ -163,7 +163,9 @@ def run_pipeline(
 
             black_levels: Dict[float, float] = {}
             for gain_db, _ in cfgutil.gain_entries(cfg):
-                _, _, _, _, bl = calculate_dark_noise_gain(project, gain_db, cfg, status=status)
+                _, _, _, _, bl = calculate_dark_noise_gain(
+                    project, gain_db, cfg, status=status
+                )
                 black_levels[gain_db] = bl
 
             roi_table = extract_roi_table(project, cfg)
@@ -191,16 +193,18 @@ def run_pipeline(
                 if status:
                     status(f"Processing gain {gain_db:.1f} dB")
                 logging.info("Processing gain %.1f dB", gain_db)
-                dsnu, rn, dsnu_map_tmp, rn_map_tmp, black_level = calculate_dark_noise_gain(
-                    project, gain_db, cfg, status=status
+                dsnu, rn, dsnu_map_tmp, rn_map_tmp, black_level = (
+                    calculate_dark_noise_gain(project, gain_db, cfg, status=status)
                 )
-                flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get(
-                    "flat_lens_folder", "flat"
-                )
+                flat_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg[
+                    "measurement"
+                ].get("flat_lens_folder", "flat")
                 if status:
                     status(f"Loading flat frames for gain {gain_db:.1f} dB")
                 flat_stack = load_image_stack(flat_folder)
-                dn_sat_gain = calculate_dn_sat(flat_stack, cfg, noise_signal_data.get(gain_db))
+                dn_sat_gain = calculate_dn_sat(
+                    flat_stack, cfg, noise_signal_data.get(gain_db)
+                )
                 gain_map_tmp = calculate_gain_map(
                     flat_stack,
                     cfg,
@@ -211,12 +215,16 @@ def run_pipeline(
                     dn_sat=dn_sat_gain,
                 )
                 if debug_stacks and first:
-                    dark_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg["measurement"].get(
-                        "dark_folder", "dark"
-                    )
+                    dark_folder = cfgutil.find_gain_folder(project, gain_db, cfg) / cfg[
+                        "measurement"
+                    ].get("dark_folder", "dark")
                     dark_stack = load_image_stack(dark_folder)
-                    tifffile.imwrite(out_dir / f"dark_cache_{int(gain_db)}dB.tiff", dark_stack)
-                    tifffile.imwrite(out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack)
+                    tifffile.imwrite(
+                        out_dir / f"dark_cache_{int(gain_db)}dB.tiff", dark_stack
+                    )
+                    tifffile.imwrite(
+                        out_dir / f"flat_cache_{int(gain_db)}dB.tiff", flat_stack
+                    )
                 prnu, prnu_map_tmp = calculate_prnu_residual(
                     flat_stack,
                     cfg,
@@ -293,7 +301,9 @@ def run_pipeline(
             prnu = float(np.mean(prnu_list)) if prnu_list else float("nan")
             system_sens = float(np.mean(sens_list)) if sens_list else float("nan")
             black_level = float(np.mean(black_list)) if black_list else 0.0
-            dn_at_10 = calculate_dn_at_snr(signals, snr_lin, cfg["processing"].get("snr_threshold_dB", 10.0))
+            dn_at_10 = calculate_dn_at_snr(
+                signals, snr_lin, cfg["processing"].get("snr_threshold_dB", 10.0)
+            )
             snr_at_50 = calculate_snr_at_half(signals, snr_lin, dn_sat)
             dn_at_0 = calculate_dn_at_snr_one(signals, snr_lin)
 
@@ -319,7 +329,9 @@ def run_pipeline(
             }
             save_summary_txt(per_gain, cfg, out_dir / "summary.txt")
 
-            mid_idx = cfg.get("reference", {}).get("roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5))
+            mid_idx = cfg.get("reference", {}).get(
+                "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
+            )
             exp_data = collect_mid_roi_snr(roi_table, mid_idx)
             sig_data = snr_signal_data
 
@@ -331,10 +343,7 @@ def run_pipeline(
                 out_dir / "snr_signal.png",
                 return_fig=True,
                 show_derivative=True,
-                interp_points=(
-                    (1 << int(cfg.get("sensor", {}).get("adc_bits", 16)))
-                    * (1 << int(cfg.get("sensor", {}).get("lsb_shift", 0)))
-                ),
+                interp_points=cfgutil.adc_full_scale(cfg),
                 black_levels=black_levels,
             )
             save_snr_signal_json(
@@ -356,17 +365,23 @@ def run_pipeline(
 
             logging.info("Plotting SNR vs Exposure")
             log_memory_usage("before snr_exposure plot: ")
-            fig_snr_exposure = plot_snr_vs_exposure(exp_data, cfg, out_dir / "snr_exposure.png", return_fig=True)
+            fig_snr_exposure = plot_snr_vs_exposure(
+                exp_data, cfg, out_dir / "snr_exposure.png", return_fig=True
+            )
             log_memory_usage("after snr_exposure plot: ")
 
             logging.info("Plotting PRNU regression")
             log_memory_usage("before prnu_fit plot: ")
-            fig_prnu_fit = plot_prnu_regression(prnu_data, cfg, out_dir / "prnu_fit.png", return_fig=True)
+            fig_prnu_fit = plot_prnu_regression(
+                prnu_data, cfg, out_dir / "prnu_fit.png", return_fig=True
+            )
             log_memory_usage("after prnu_fit plot: ")
 
             logging.info("Plotting noise maps")
             log_memory_usage("before dsnu_map plot: ")
-            fig_dsnu_map = plot_heatmap(dsnu_map, "DSNU map", out_dir / "dsnu_map.png", return_fig=True)
+            fig_dsnu_map = plot_heatmap(
+                dsnu_map, "DSNU map", out_dir / "dsnu_map.png", return_fig=True
+            )
             fig_dsnu_map_scaled = plot_heatmap(
                 dsnu_map,
                 "DSNU map (scaled)",
@@ -376,7 +391,9 @@ def run_pipeline(
                 return_fig=True,
             )
             log_memory_usage("after dsnu_map plot: ")
-            fig_rn_map = plot_heatmap(rn_map, "Read noise map", out_dir / "readnoise_map.png", return_fig=True)
+            fig_rn_map = plot_heatmap(
+                rn_map, "Read noise map", out_dir / "readnoise_map.png", return_fig=True
+            )
             fig_rn_map_scaled = plot_heatmap(
                 rn_map,
                 "Read noise map (scaled)",
@@ -415,11 +432,13 @@ def run_pipeline(
                 r1 = cfgutil.nearest_exposure(cfg, 1.0)
                 chart_folder = cfgutil.find_exposure_folder(project, g0, r1, cfg)
                 chart_img = load_first_frame(chart_folder)
-                flat_folder = cfgutil.find_gain_folder(project, g0, cfg) / cfg["measurement"].get(
-                    "flat_lens_folder", "LensFlat"
-                )
+                flat_folder = cfgutil.find_gain_folder(project, g0, cfg) / cfg[
+                    "measurement"
+                ].get("flat_lens_folder", "LensFlat")
                 flat_img = load_first_frame(flat_folder)
-                dark_folder = cfgutil.find_gain_folder(project, g0, cfg) / cfg["measurement"].get("dark_folder", "dark")
+                dark_folder = cfgutil.find_gain_folder(project, g0, cfg) / cfg[
+                    "measurement"
+                ].get("dark_folder", "dark")
                 dark_img = load_first_frame(dark_folder)
                 chart_rects = load_rois(project / cfg["measurement"]["chart_roi_file"])
                 flat_rects = load_rois(project / cfg["measurement"]["flat_roi_file"])
@@ -543,7 +562,9 @@ class MainWindow(QMainWindow):
         self.project_dir = path
         cfg_path = self.project_dir / "config.yaml"
         if not cfg_path.is_file():
-            QMessageBox.critical(self, "Error", "config.yaml not found in project folder")
+            QMessageBox.critical(
+                self, "Error", "config.yaml not found in project folder"
+            )
             return
         self.config = load_config(cfg_path)
         apply_logging_config(self.config)
@@ -557,7 +578,9 @@ class MainWindow(QMainWindow):
             return
         cfg_path = self.project_dir / "config.yaml"
         if not cfg_path.is_file():
-            QMessageBox.critical(self, "Error", "config.yaml not found in project folder")
+            QMessageBox.critical(
+                self, "Error", "config.yaml not found in project folder"
+            )
             return
         # reload configuration fresh each run to avoid stale values
         self.config = load_config(cfg_path)
@@ -589,7 +612,9 @@ class MainWindow(QMainWindow):
         if self.project_dir is None or self.config is None:
             return
 
-        out_dir = self.project_dir / self.config.get("output", {}).get("output_dir", "output")
+        out_dir = self.project_dir / self.config.get("output", {}).get(
+            "output_dir", "output"
+        )
 
         summary = result.get("summary", {})
         figures = result.get("figures", {})
