@@ -19,7 +19,6 @@ from core import analysis
 from utils import config as cfgutil
 
 __all__ = [
-    "plot_snr_vs_signal",
     "plot_snr_vs_signal_multi",
     "plot_snr_vs_exposure",
     "plot_prnu_regression",
@@ -43,40 +42,6 @@ def _validate_positive_finite(arr: np.ndarray, name: str) -> np.ndarray:
 
 def _auto_labels(ratios: Sequence[float]) -> list[str]:
     return [f"{r:g}×" for r in ratios]
-
-
-def plot_snr_vs_signal(
-    signal: np.ndarray,
-    snr: np.ndarray,
-    cfg: Dict[str, Any],
-    output_path: Path,
-    *,
-    return_fig: bool = False,
-) -> Figure | None:
-    """Plot SNR–Signal curve (log–log) with ideal line and threshold."""
-    signal = _validate_positive_finite(signal, "signal")
-    snr = _validate_positive_finite(snr, "snr")
-    if signal.size == 1 or snr.size == 1:
-        # Avoid singular log scale when only one sample is present
-        signal = np.asarray([signal[0] * 0.9, signal[0] * 1.1])
-        snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
-    thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
-    snr_db = 20 * np.log10(snr)
-    fig = plt.figure()
-    plt.loglog(signal, snr_db, marker="o", linestyle="-", label="Measured")
-    plt.loglog(signal, 20 * np.log10(np.sqrt(signal)), linestyle=":", label="Ideal √µ")
-    plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
-    plt.xlabel("Signal (DN)")
-    plt.ylabel("SNR (dB)")
-    plt.title("SNR vs Signal")
-    plt.grid(True, which="both")
-    plt.legend()
-    plt.tight_layout()
-    fig.savefig(output_path)
-    if return_fig:
-        return fig
-    plt.close(fig)
-    return None
 
 
 def plot_snr_vs_signal_multi(
