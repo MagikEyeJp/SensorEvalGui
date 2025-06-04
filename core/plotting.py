@@ -14,8 +14,6 @@ from matplotlib.figure import Figure
 import numpy as np
 
 from utils.logger import log_memory_usage
-from scipy.interpolate import UnivariateSpline
-from scipy.optimize import curve_fit
 from core import analysis
 
 from utils import config as cfgutil
@@ -45,115 +43,6 @@ def _validate_positive_finite(arr: np.ndarray, name: str) -> np.ndarray:
 
 def _auto_labels(ratios: Sequence[float]) -> list[str]:
     return [f"{r:g}×" for r in ratios]
-
-
-def _smooth_and_second_derivative(
-    signal: np.ndarray,
-    snr: np.ndarray,
-    window: int = 5,
-    poly: int = 2,
-    interp_points: int | None = None,
-    *,
-    use_logistic: bool = False,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return smoothed SNR and its second derivative using a spline fit.
-
-    When ``interp_points`` is provided and greater than ``signal.size``, the
-    ``signal`` and ``snr`` arrays are linearly interpolated to that length before
-    smoothing. This can help produce smoother curves when the original data
-    points are sparse.
-    """
-
-    idx = np.argsort(signal)
-    sig = np.asarray(signal, dtype=float)[idx]
-    s = np.asarray(snr, dtype=float)[idx]
-    logging.debug(
-        "_smooth_and_second_derivative: sorted signal=%s",
-        np.array2string(sig, precision=3, threshold=10),
-    )
-    logging.debug(
-        "_smooth_and_second_derivative: sorted snr=%s",
-        np.array2string(s, precision=3, threshold=10),
-    )
-
-    diffs = np.diff(sig)
-    close_idx = np.where(np.abs(diffs) < 1.0)[0]
-    if close_idx.size > 0:
-        logging.debug(
-            "_smooth_and_second_derivative: close signal points at idx %s -> diffs=%s",
-            close_idx.tolist(),
-            np.array2string(diffs[close_idx], precision=3, threshold=10),
-        )
-
-    if interp_points is not None and interp_points > sig.size:
-        xs = np.linspace(float(sig.min()), float(sig.max()), int(interp_points))
-        ys = np.interp(xs, sig, s)
-        sig = xs
-        s = ys
-        logging.debug(
-            "_smooth_and_second_derivative: interpolated to %d points", len(sig)
-        )
-
-    s_smooth: np.ndarray
-    d2: np.ndarray
-
-    # attempt logistic curve fit when requested
-    if use_logistic and sig.size >= 4:
-
-        def _logistic(
-            x: np.ndarray, a: float, b: float, c: float, d: float
-        ) -> np.ndarray:
-            return a + b / (1.0 + np.exp(-(x - c) / d))
-
-        thresh = 0.6 * np.max(sig)
-        mask = sig >= thresh
-        if np.count_nonzero(mask) >= 4:
-            sig_fit = sig[mask]
-            s_fit = s[mask]
-            init = [
-                float(s_fit[-1]),
-                float(s_fit[0] - s_fit[-1]),
-                float(sig_fit[len(sig_fit) // 2]),
-                1.0,
-            ]
-            try:
-                popt, _ = curve_fit(_logistic, sig_fit, s_fit, p0=init, maxfev=10000)
-                s_smooth = _logistic(sig, *popt)
-                e = np.exp(-(sig - popt[2]) / popt[3])
-                d2 = (popt[1] / (popt[3] ** 2)) * e * (e**2 - 1.0) / (1.0 + e) ** 4
-                logging.debug(
-                    "_smooth_and_second_derivative: logistic second derivative=%s",
-                    np.array2string(d2, precision=3, threshold=10),
-                )
-            except Exception as exc:
-                logging.debug(
-                    "_smooth_and_second_derivative: logistic fit failed due to %s", exc
-                )
-                s_smooth = s
-                d1 = np.gradient(s_smooth, sig)
-                d2 = np.gradient(d1, sig)
-        else:
-            s_smooth = s
-            d1 = np.gradient(s_smooth, sig)
-            d2 = np.gradient(d1, sig)
-    elif sig.size >= 4:
-        spline = UnivariateSpline(sig, s, s=0.2, k=min(poly + 1, 5))
-        s_smooth = spline(sig)
-        d2 = spline.derivative(2)(sig)
-        logging.debug(
-            "_smooth_and_second_derivative: second derivative=%s",
-            np.array2string(d2, precision=3, threshold=10),
-        )
-    else:
-        s_smooth = s
-        d1 = np.gradient(s_smooth, sig)
-        d2 = np.gradient(d1, sig)
-        logging.debug(
-            "_smooth_and_second_derivative: second derivative (grad)=%s",
-            np.array2string(d2, precision=3, threshold=10),
-        )
-
-    return sig, s_smooth, d2
 
 
 def plot_snr_vs_signal(
@@ -196,23 +85,15 @@ def plot_snr_vs_signal_multi(
     output_path: Path,
     *,
     return_fig: bool = False,
-    show_derivative: bool = False,
     interp_points: int | None = None,
     black_levels: Dict[float, float] | None = None,
 ) -> Figure | None:
-    """Plot SNR–Signal curves for multiple gains.
-
-    When ``show_derivative`` is ``True`` an additional subplot is drawn below the
-    main plot showing the second derivative of the smoothed SNR curve.
-    """
+    """Plot SNR–Signal curves for multiple gains."""
     logging.info("plot_snr_vs_signal_multi: output=%s", output_path)
     log_memory_usage("plot start: ")
 
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
-    if show_derivative:
-        fig, (ax_snr, ax_d2) = plt.subplots(2, 1, figsize=(6, 8), sharex=True)
-    else:
-        fig, ax_snr = plt.subplots()
+    fig, ax_snr = plt.subplots()
 
     adc_full_scale = cfgutil.adc_full_scale(cfg)
 
@@ -245,13 +126,6 @@ def plot_snr_vs_signal_multi(
             xs, 20 * np.log10(snr_fit), linestyle="-", color=color, label="_nolegend_"
         )
 
-        if show_derivative:
-            d1 = np.gradient(snr_fit, xs)
-            d2 = np.gradient(d1, xs)
-            ax_d2.semilogx(
-                xs, d2, marker=".", linestyle="-", color=color, label=f"{gain:g}dB"
-            )
-
     if all_signals:
         concat = np.concatenate(all_signals)
         x_min = float(concat.min())
@@ -268,12 +142,6 @@ def plot_snr_vs_signal_multi(
     ax_snr.set_title("SNR vs Signal")
     ax_snr.grid(True, which="both")
     ax_snr.legend()
-    if show_derivative:
-        ax_d2.set_xlabel("Signal (DN)")
-        ax_d2.set_ylabel("d²SNR / dDN²")
-        ax_d2.set_title("Second Derivative")
-        ax_d2.grid(True, which="both")
-        ax_d2.legend()
     fig.tight_layout()
     fig.savefig(output_path)
     if return_fig:

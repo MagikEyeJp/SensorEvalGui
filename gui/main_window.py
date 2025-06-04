@@ -342,7 +342,6 @@ def run_pipeline(
                 cfg,
                 out_dir / "snr_signal.png",
                 return_fig=True,
-                show_derivative=True,
                 interp_points=cfgutil.adc_full_scale(cfg),
                 black_levels=black_levels,
             )
