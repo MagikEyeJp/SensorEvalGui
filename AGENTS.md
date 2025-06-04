@@ -19,5 +19,5 @@ This repository is maintained using Codex agents. Follow these guidelines when s
 - Provide a brief overview of the changes made.
 - Mention any noteworthy design decisions or limitations.
 
-## 回答について
-基本的に日本語で回答してください
+## Langrage
+ユーザーとは、基本的に日本語でやりとりしてください
