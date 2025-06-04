@@ -147,20 +147,6 @@ def run_pipeline(
             snr_lin = signals / noises
             ratios = np.array([kv[0][1] for kv in tuples])
 
-            gain_mode = cfg.get("processing", {}).get("gain_map_mode", "none")
-            if gain_mode != "none":
-                stats_corr = extract_roi_stats_gainmap(project, cfg, status=status)
-                tuples_c = sorted(stats_corr.items(), key=lambda kv: kv[1]["mean"])
-                signals_corr = np.array([kv[1]["mean"] for kv in tuples_c])
-                noises_corr = np.array([kv[1]["std"] for kv in tuples_c])
-                prnu_stats = stats_corr
-            else:
-                signals_corr = signals
-                noises_corr = noises
-                prnu_stats = stats
-
-            prnu_data = collect_prnu_points(prnu_stats)
-
             black_levels: Dict[float, float] = {}
             for gain_db, _ in cfgutil.gain_entries(cfg):
                 _, _, _, _, bl = calculate_dark_noise_gain(
@@ -173,6 +159,22 @@ def run_pipeline(
             noise_signal_data = collect_gain_noise_signal(roi_table, cfg, black_levels)
             flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
             flat_rects = load_rois(flat_roi_file)
+
+            gain_mode = cfg.get("processing", {}).get("gain_map_mode", "none")
+            if gain_mode != "none":
+                stats_corr = extract_roi_stats_gainmap(
+                    project, cfg, status=status, noise_signals=noise_signal_data
+                )
+                tuples_c = sorted(stats_corr.items(), key=lambda kv: kv[1]["mean"])
+                signals_corr = np.array([kv[1]["mean"] for kv in tuples_c])
+                noises_corr = np.array([kv[1]["std"] for kv in tuples_c])
+                prnu_stats = stats_corr
+            else:
+                signals_corr = signals
+                noises_corr = noises
+                prnu_stats = stats
+
+            prnu_data = collect_prnu_points(prnu_stats)
 
             # 2. Dark/flat metrics per gain (use first gain for maps)
             debug_stacks = cfg["output"].get("debug_stacks", False)

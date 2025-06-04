@@ -543,6 +543,7 @@ def extract_roi_stats(
     status: Optional[Callable[[str], None]] = None,
     *,
     use_gain_map: bool = False,
+    noise_signals: Dict[float, tuple[np.ndarray, np.ndarray]] | None = None,
 ) -> Dict[Tuple[float, float], Dict[str, float]]:
     """Compute mean, standard deviation and SNR for each ROI.
 
@@ -552,6 +553,9 @@ def extract_roi_stats(
         Root directory containing measurement folders.
     cfg:
         Parsed configuration dictionary.
+    noise_signals:
+        Optional mapping of gain to ``(signal, noise)`` arrays used when
+        estimating ``dn_sat`` for gain-map correction.
 
     Returns
     -------
@@ -605,6 +609,9 @@ def extract_roi_stats(
                     project_dir=project_dir,
                     gain_db=gain_db,
                     stack=flat_stack,
+                    noise_signal=(
+                        None if noise_signals is None else noise_signals.get(gain_db)
+                    ),
                 )
                 gain_map_cache[gain_db] = gain_map_per_gain
 
@@ -631,6 +638,11 @@ def extract_roi_stats(
                         project_dir=project_dir,
                         gain_db=gain_db,
                         stack=stack,
+                        noise_signal=(
+                            None
+                            if noise_signals is None
+                            else noise_signals.get(gain_db)
+                        ),
                     )
                 else:
                     gain_map = gain_map_per_gain
@@ -687,13 +699,23 @@ def extract_roi_stats_gainmap(
     project_dir: Path | str,
     cfg: Dict[str, Any],
     status: Optional[Callable[[str], None]] = None,
+    *,
+    noise_signals: Dict[float, tuple[np.ndarray, np.ndarray]] | None = None,
 ) -> Dict[Tuple[float, float], Dict[str, float]]:
-    """Compute ROI stats with gain-map correction applied."""
+    """Compute ROI stats with gain-map correction applied.
+
+    Parameters
+    ----------
+    noise_signals:
+        Optional mapping of gain to ``(signal, noise)`` arrays used when
+        estimating ``dn_sat`` for the gain maps.
+    """
     return extract_roi_stats(
         project_dir,
         cfg,
         status=status,
         use_gain_map=True,
+        noise_signals=noise_signals,
     )
 
 
@@ -1119,11 +1141,16 @@ def calculate_dn_sat(
         Stack of illuminated flat-field frames.
     cfg:
         Parsed configuration dictionary.
+    noise_signal:
+        Optional ``(signal, noise)`` pair used to estimate saturation from the
+        noise curve. If omitted, the estimate falls back to the brightest pixel
+        values of ``flat_stack``.
 
     Returns
     -------
     float
-        Detected saturation DN value.
+        Detected saturation DN value limited by ``sat_factor`` and the ADC full
+        scale.
     """
     p999 = float(np.percentile(flat_stack, 99.9))
     logging.info("calculate_dn_sat: p999=%.3f", p999)
@@ -1134,7 +1161,9 @@ def calculate_dn_sat(
         logging.info("calculate_dn_sat: noise_est=%.3f", est)
     else:
         est = float("nan")
-        logging.info("calculate_dn_sat: noise_signal not provided")
+        logging.info(
+            "calculate_dn_sat: noise_signal not provided; using flat-frame fallback"
+        )
 
     if not np.isfinite(est):
         mean_frame = np.mean(flat_stack, axis=0)
