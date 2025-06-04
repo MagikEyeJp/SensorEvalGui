@@ -69,10 +69,10 @@ Gainごとに下記項目を出力
   から得られるしきい値と比較して最大値を採用し、結果を `ADC_FullScaleDN` でクランプ
   する。`ADC_FullScaleDN` は `(1 << adc_bits) - 1` に `1 << lsb_shift` を乗じた値とする。
 * **Dynamic Range (dB)**：最大信号値として DN\_sat を用い、Read Noise (DN) との比から 20\*log10(DN\_sat / Noise) を算出。
-* **SNR @ 50%**：グレースケールチャートまたはフラット画像で、Full-Wellの50%（例：32768 DN）に最も近いμとSNRの系列から、補間または回帰により推定して算出。
+* **SNR @ 50%**：グレースケールチャートまたはフラット画像で、Full-Wellの50%（例：32768 DN）に最も近いμとSNRの系列から、`utils.robust_pspline.robust_p_spline_fit` を利用したロバストPスプライン回帰で推定して算出。
   * DN\_satの基準：config.reference.sat\_factor
-* **DN @ SNR=10dB**：SNRカーブから、SNRが10dB（config.processing.snr\_threshold\_dB）を超える最小DN値を補間または回帰で推定。
-* **DN @ SNR=1 (0 dB)**：SNRが1となる最小信号レベル（ノイズと等価）を補間または回帰で推定。
+* **DN @ SNR=10dB**：SNRカーブから、SNRが10dB（config.processing.snr\_threshold\_dB）を超える最小DN値をPスプライン回帰曲線から推定。
+* **DN @ SNR=1 (0 dB)**：SNRが1となる最小信号レベル（ノイズと等価）を同回帰曲線から推定。
 
 #### 2. `roi_stats.csv`
 

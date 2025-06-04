@@ -81,6 +81,22 @@ Run the GUI using `python main.py`
 For a comprehensive description of each output file, refer to
 [Sensor_Output_Spec.md](Sensor_Output_Spec.md).
 
+##📐 Robust P-spline SNR Fitting
+
+The SNR curves can be smoothed using the `utils.robust_pspline.robust_p_spline_fit`
+function. It performs robust P-spline regression with automatic parameter search
+and returns the fitted curve together with a 95% confidence interval.  Typical
+usage for an array of signal levels `x` and SNR values `y` is:
+
+```python
+from utils.robust_pspline import robust_p_spline_fit
+
+x_dense, y_pred, upper, lower = robust_p_spline_fit(x, y)
+```
+
+The resulting `x_dense` and `y_pred` arrays can be plotted to visualize the
+smoothed SNR curve, while `upper` and `lower` provide the confidence bounds.
+
 ##🔮 Planned Features
 
 	•	ROI/pixel mode switching in GUI
