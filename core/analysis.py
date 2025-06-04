@@ -1533,6 +1533,11 @@ def fit_snr_signal_model(
     adc_full_scale: float,
     black_level: float = 0.0,
     *,
+    deg: int = 3,
+    n_splines: int | str = "auto",
+    lam: float | None = None,
+    knot_density: str = "auto",
+    robust: str = "huber",
     num_points: int = 400,
     max_signal: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -1540,6 +1545,18 @@ def fit_snr_signal_model(
 
     Parameters
     ----------
+    deg:
+        Spline degree.
+    n_splines:
+        Number of splines or ``"auto"`` for automatic selection.
+    lam:
+        Smoothing parameter. ``None`` lets the algorithm search a suitable value.
+    knot_density:
+        Knot placement strategy (``"auto"`` or ``"uniform"``).
+    robust:
+        Weighting method for robust fitting.
+    num_points:
+        Number of points in the returned curve.
     max_signal:
         Optional clipping threshold. Points above this value are ignored and
         the fitted curve is truncated accordingly.
@@ -1570,11 +1587,11 @@ def fit_snr_signal_model(
     xs, ys, _, _ = robust_p_spline_fit(
         signal,
         snr,
-        deg=3,
-        n_splines="auto",
-        lam=None,
-        knot_density="auto",
-        robust="huber",
+        deg=deg,
+        n_splines=n_splines,
+        lam=lam,
+        knot_density=knot_density,
+        robust=robust,
         num_points=num_points,
     )
 

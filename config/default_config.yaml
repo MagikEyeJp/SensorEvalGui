@@ -54,6 +54,13 @@ processing:
   read_noise_mode: 0               # 0: use std of stack, 1: use std of frame diff / √2
   prnu_fit: LS                     # LS or WLS regression method
   exclude_abnormal_snr: true       # Ignore low‑SNR patches
+  snr_fit:
+    deg: 3                        # Polynomial degree for P-spline fit
+    n_splines: auto               # Number of B-splines or 'auto'
+    lam: null                     # Smoothing parameter or null
+    knot_density: auto            # 'auto' or 'uniform'
+    robust: huber                 # Robust weight function
+    num_points: 400               # Points in fitted curve
 
 plot:
   # exposures: [4.0,2.0,1.0,0.5,0.25,0.125,0.0625]  # Override order if needed

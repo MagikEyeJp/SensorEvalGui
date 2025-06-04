@@ -96,6 +96,8 @@ x_dense, y_pred, upper, lower = robust_p_spline_fit(x, y)
 
 The resulting `x_dense` and `y_pred` arrays can be plotted to visualize the
 smoothed SNR curve, while `upper` and `lower` provide the confidence bounds.
+Parameters for the fitting routine can be tuned via the `processing.snr_fit`
+section in `config.yaml`.
 
 ##🔮 Planned Features
 

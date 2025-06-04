@@ -213,6 +213,8 @@ def save_snr_signal_json(
     import numpy as np
     from . import analysis
 
+    proc_cfg = cfg.get("processing", {})
+    snr_cfg = proc_cfg.get("snr_fit", {})
     flag = cfg.get("output", {}).get("snr_signal_data", False)
 
     def writer(p: Path) -> None:
@@ -239,6 +241,12 @@ def save_snr_signal_json(
                 snr_use,
                 full_scale,
                 black_level=bl,
+                deg=int(snr_cfg.get("deg", 3)),
+                n_splines=snr_cfg.get("n_splines", "auto"),
+                lam=snr_cfg.get("lam"),
+                knot_density=snr_cfg.get("knot_density", "auto"),
+                robust=snr_cfg.get("robust", "huber"),
+                num_points=int(snr_cfg.get("num_points", 400)),
                 max_signal=limit,
             )
             snr_fit = np.maximum(snr_fit, 0.0)

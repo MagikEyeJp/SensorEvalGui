@@ -40,6 +40,7 @@ def test_load_config_merges_defaults(tmp_path):
     # default values preserved
     assert cfg["measurement"]["gains"]["6"]["folder"] == "gain_6dB"
     assert cfg["processing"]["min_sig_factor"] == 3
+    assert cfg["processing"]["snr_fit"]["num_points"] == 400
 
 
 def test_gain_entries_sorted():

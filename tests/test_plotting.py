@@ -63,14 +63,14 @@ def test_plot_snr_vs_signal_multi_interp(tmp_path):
     data = {0.0: (np.array([1.0, 3.0]), np.array([2.0, 6.0]))}
     fig = plotting.plot_snr_vs_signal_multi(
         data,
-        {},
+        {"processing": {"snr_fit": {"num_points": 5}}},
         tmp_path / "interp.png",
         return_fig=True,
         interp_points=5,
         black_levels={0.0: 0.0},
     )
     assert (tmp_path / "interp.png").is_file()
-    assert len(fig.axes[0].lines[0].get_xdata()) == 2
+    assert len(fig.axes[0].lines[1].get_xdata()) == 5
 
 
 def test_plot_snr_vs_signal_multi_invalid(tmp_path):
