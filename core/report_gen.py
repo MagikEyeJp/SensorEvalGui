@@ -216,6 +216,7 @@ def save_snr_signal_json(
             xs, snr_fit = analysis.fit_snr_signal_model(
                 sig, snr, full_scale, black_level=bl
             )
+            snr_fit = np.maximum(snr_fit, 0.0)
             out[f"{gain:g}"] = {
                 "signal": sig.tolist(),
                 "snr": snr.tolist(),

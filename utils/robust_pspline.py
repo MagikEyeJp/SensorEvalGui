@@ -10,7 +10,7 @@ from scipy.linalg import cho_factor, cho_solve
 __all__ = ["robust_p_spline_fit", "plot_fit"]
 
 
-_DEF_LAM_RANGE = np.logspace(-2, 2, 8)
+_DEF_LAM_RANGE = np.logspace(-3, 2, 10)
 _DEF_N_RANGE = np.arange(10, 31, 5)
 
 

@@ -57,4 +57,4 @@ def test_save_snr_signal_json(tmp_path):
     txt = json.loads(out_file.read_text(encoding="utf-8"))
     assert "0" in txt
     assert txt["0"]["signal"][0] == pytest.approx(1.0)
-    assert len(txt["0"]["fit_signal"]) == 200
+    assert len(txt["0"]["fit_signal"]) == 400
