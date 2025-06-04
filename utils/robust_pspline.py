@@ -166,7 +166,12 @@ def robust_p_spline_fit(
     y_arr = y_arr[order]
 
     if x_arr.size < deg + 1:
-        x_dense = np.linspace(float(x_arr.min()), float(x_arr.max()), num_points)
+        x_dense = np.linspace(
+            float(x_arr.min()), float(x_arr.max()), num_points - 1, endpoint=False
+        )
+        x_dense = np.concatenate(
+            [x_dense, [np.nextafter(float(x_arr.max()), float(x_arr.min()))]]
+        )
         y_dense = np.interp(x_dense, x_arr, y_arr)
         return x_dense, y_dense, y_dense, y_dense
 
@@ -184,7 +189,12 @@ def robust_p_spline_fit(
     D = _diff_penalty(B.shape[1])
     coef, res, weights = _irls(B, y_aug, lam_opt, D, robust=robust, weights=w)
 
-    x_dense = np.linspace(float(x_arr.min()), float(x_arr.max()), num_points)
+    x_dense = np.linspace(
+        float(x_arr.min()), float(x_arr.max()), num_points - 1, endpoint=False
+    )
+    x_dense = np.concatenate(
+        [x_dense, [np.nextafter(float(x_arr.max()), float(x_arr.min()))]]
+    )
     B_dense = BSpline.design_matrix(x_dense, knots, deg).toarray()
 
     DtD = D.T @ D
