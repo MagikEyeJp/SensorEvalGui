@@ -98,6 +98,11 @@ The resulting `x_dense` and `y_pred` arrays can be plotted to visualize the
 smoothed SNR curve, while `upper` and `lower` provide the confidence bounds.
 Parameters for the fitting routine can be tuned via the `processing.snr_fit`
 section in `config.yaml`.
+代表的なパラメータの目安は以下の通りです。
+  * `lam` を `null` にすると 1e-3〜1e2 の範囲で自動探索します
+  * `n_splines` を `auto` にすると 10〜30 の範囲から最適値を選びます
+  * `deg` は `n_splines` より小さい値に設定してください
+
 
 ##🔮 Planned Features
 

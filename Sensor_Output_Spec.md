@@ -246,6 +246,9 @@ processing:
     knot_density: auto    # 'auto' or 'uniform'
     robust: huber         # ロバスト重み関数
     num_points: 400       # 出力曲線のポイント数
+  * `lam` null なら 1e-3〜1e2 の範囲を自動探索
+  * `n_splines` auto なら 10〜30 本を候補とする
+  * `deg` は `n_splines` より小さく設定
 
 plot:
   exposures: [1.0, 0.0625]    # 図1に描画する露光倍率
