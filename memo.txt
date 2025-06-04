@@ -2,17 +2,17 @@ memo
 
 ----- 未完了
 
-d SNR-Exposureに√k線をひけるか
-d SNR-Exposureにクラウド状に点を重ねる。点が少なすぎる? ROIxExposure分はあるはず
-
-d SNR-Exposureの10dBラインが軸の数値と合ってない
-d PRNU Regresion に全てのGainをのせる
-c PRNU Regresion 点が少なすぎる? ROIxExposure分はあるはず
-c PRNU residualの結果がおかしい。マーカーがあり変化が大きいはず部分のDNが小さくなっている
+d SNR-Exposureに√k線は1本に(Gain0dBを使用)
 d プログレスバーの進捗が一気に進むので刻むように
-d System Sensitivityに露出倍率が考慮されていない
+d gainmapをflat_frameにしたとき、ガウシアンLPFをかけてPRNUの高周波成分をのこすようにする
+
 
 ----- 完了
+C PRNU residualのグラフ上部にある1e-11はなんの意味か -> スケール
+D System Sensitivityに露出倍率が考慮されていない
+D PRNU Regresion に全てのGainをのせる
+D SNR-Exposureの10dBラインが軸の数値と合ってない
+D SNR-Exposureに√k線をひけるか
 D SNR-Exposureの横軸の単位をmsに
 D SNR-Signalグラフがおかしい。DNの範囲もおかしいし、SNRが低すぎる。
 D SNR-Signalに全てのGainを重ねる
