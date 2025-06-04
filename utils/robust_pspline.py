@@ -165,6 +165,11 @@ def robust_p_spline_fit(
     x_arr = x_arr[order]
     y_arr = y_arr[order]
 
+    if x_arr.size < deg + 1:
+        x_dense = np.linspace(float(x_arr.min()), float(x_arr.max()), num_points)
+        y_dense = np.interp(x_dense, x_arr, y_arr)
+        return x_dense, y_dense, y_dense, y_dense
+
     x_aug = np.concatenate([np.repeat(x_arr[0], 3), x_arr, np.repeat(x_arr[-1], 3)])
     y_aug = np.concatenate([np.repeat(y_arr[0], 3), y_arr, np.repeat(y_arr[-1], 3)])
     w = np.ones_like(x_aug)
