@@ -12,6 +12,7 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import numpy as np
 from scipy.interpolate import UnivariateSpline
+from utils.robust_pspline import robust_p_spline_fit
 from scipy.optimize import curve_fit
 import tifffile
 
@@ -1513,7 +1514,7 @@ def fit_three_region_snr_model(
     *,
     num_points: int = 200,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Return smoothed SNR curve using linear interpolation and spline."""
+    """Return smoothed SNR curve using a robust P-spline fit."""
 
     signal = np.asarray(signal, dtype=float)
     snr = np.asarray(snr, dtype=float)
@@ -1529,14 +1530,14 @@ def fit_three_region_snr_model(
     signal = signal[order]
     snr = snr[order]
 
-    xs = np.linspace(float(signal.min()), float(signal.max()), num_points)
-    ys = np.interp(xs, signal, snr)
-
-    if xs.size >= 4:
-        try:
-            spline = UnivariateSpline(xs, ys, s=0.2, k=3)
-            ys = spline(xs)
-        except Exception:
-            pass
-
+    xs, ys, _, _ = robust_p_spline_fit(
+        signal,
+        snr,
+        deg=3,
+        n_splines="auto",
+        lam=None,
+        knot_density="auto",
+        robust="huber",
+        num_points=num_points,
+    )
     return xs, ys
