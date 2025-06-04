@@ -1515,8 +1515,16 @@ def fit_snr_signal_model(
     black_level: float = 0.0,
     *,
     num_points: int = 400,
+    max_signal: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Return smoothed SNR curve using a robust P-spline fit."""
+    """Return smoothed SNR curve using a robust P-spline fit.
+
+    Parameters
+    ----------
+    max_signal:
+        Optional clipping threshold. Points above this value are ignored and
+        the fitted curve is truncated accordingly.
+    """
 
     signal = np.asarray(signal, dtype=float)
     snr = np.asarray(snr, dtype=float)
@@ -1532,6 +1540,14 @@ def fit_snr_signal_model(
     signal = signal[order]
     snr = snr[order]
 
+    if max_signal is not None and np.isfinite(max_signal):
+        mask = signal <= max_signal
+        signal = signal[mask]
+        snr = snr[mask]
+        if signal.size == 0:
+            xs = np.linspace(0.0, max_signal, num_points)
+            return xs, np.full_like(xs, np.nan)
+
     xs, ys, _, _ = robust_p_spline_fit(
         signal,
         snr,
@@ -1542,4 +1558,11 @@ def fit_snr_signal_model(
         robust="huber",
         num_points=num_points,
     )
+
+    if max_signal is not None and np.isfinite(max_signal):
+        mask = xs <= max_signal
+        xs = xs[mask]
+        ys = ys[mask]
+
+    ys = np.maximum.accumulate(np.maximum(ys, 0.0))
     return xs, ys

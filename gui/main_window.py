@@ -329,6 +329,8 @@ def run_pipeline(
             }
             save_summary_txt(per_gain, cfg, out_dir / "summary.txt")
 
+            dn_sat_map = {g: v.get("DN_sat", float("nan")) for g, v in per_gain.items()}
+
             mid_idx = cfg.get("reference", {}).get(
                 "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
             )
@@ -344,12 +346,14 @@ def run_pipeline(
                 return_fig=True,
                 interp_points=cfgutil.adc_full_scale(cfg),
                 black_levels=black_levels,
+                dn_sat=dn_sat_map,
             )
             save_snr_signal_json(
                 sig_data,
                 cfg,
                 out_dir / "snr_signal.json",
                 black_levels=black_levels,
+                dn_sat=dn_sat_map,
             )
             log_memory_usage("after snr_signal plot: ")
 
