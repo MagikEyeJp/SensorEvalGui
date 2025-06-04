@@ -334,7 +334,11 @@ def run_pipeline(
             mid_idx = cfg.get("reference", {}).get(
                 "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
             )
-            exp_data = collect_mid_roi_snr(roi_table, mid_idx)
+            exp_data = collect_mid_roi_snr(
+                roi_table,
+                mid_idx,
+                black_levels=black_levels,
+            )
             sig_data = snr_signal_data
 
             logging.info("Plotting SNR vs Signal (multi)")
