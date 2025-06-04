@@ -9,7 +9,6 @@ import tifffile
 import numpy as np
 
 __all__ = [
-    "find_condition_folders",
     "load_image_stack",
     "load_first_frame",
 ]
@@ -28,32 +27,6 @@ def _collect_frames(folder: Path) -> List[Path]:
 # -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
-
-
-def find_condition_folders(
-    project_dir: Path | str, cfg: Dict
-) -> List[Tuple[Path, float, float]]:
-    """Discover leaf folders <gain>/<exposure> present on disk.
-
-    Returns list[ (folder_path, gain_db, exposure_ratio) ].
-    """
-    project_dir = Path(project_dir)
-
-    gains_cfg = cfg["measurement"]["gains"]  # dict: db -> {folder: ..}
-    exposures_cfg = cfg["measurement"]["exposures"]  # dict: ratio -> {folder: ..}
-
-    folders: List[Tuple[Path, float, float]] = []
-    for gain_db_str, g_meta in gains_cfg.items():
-        gain_db = float(gain_db_str)
-        gain_folder = project_dir / g_meta["folder"]
-        if not gain_folder.is_dir():
-            continue  # skip missing gain dir
-        for ratio_str, e_meta in exposures_cfg.items():
-            ratio = float(ratio_str)
-            exp_folder = gain_folder / e_meta["folder"]
-            if exp_folder.is_dir() and any(exp_folder.iterdir()):
-                folders.append((exp_folder, gain_db, ratio))
-    return folders
 
 
 def load_image_stack(folder: Path | str) -> np.ndarray:
