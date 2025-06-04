@@ -10,6 +10,6 @@ def test_robust_p_spline_simple():
     x_dense, y_pred, upper, lower = robust_p_spline_fit(
         x, y, deg=3, n_splines=15, lam=0.1, knot_density="uniform"
     )
-    assert x_dense.size == 200
+    assert x_dense.size == 400
     assert y_pred.shape == x_dense.shape
     assert np.all(upper >= lower)

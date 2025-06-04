@@ -87,8 +87,13 @@ def plot_snr_vs_signal_multi(
         xs, snr_fit = analysis.fit_snr_signal_model(
             sig, snr, adc_full_scale, black_level=bl
         )
+        snr_fit = np.maximum(snr_fit, 0.0)
         ax_snr.loglog(
-            xs, 20 * np.log10(snr_fit), linestyle="-", color=color, label="_nolegend_"
+            xs,
+            20 * np.log10(np.maximum(snr_fit, 1e-12)),
+            linestyle="-",
+            color=color,
+            label="_nolegend_",
         )
 
     if all_signals:

@@ -1514,7 +1514,7 @@ def fit_snr_signal_model(
     adc_full_scale: float,
     black_level: float = 0.0,
     *,
-    num_points: int = 200,
+    num_points: int = 400,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return smoothed SNR curve using a robust P-spline fit."""
 
