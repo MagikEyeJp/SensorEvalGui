@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Mapping
 import yaml
 
 __all__ = [
@@ -16,6 +16,7 @@ __all__ = [
     "gain_ratio",
     "nearest_gain",
     "nearest_exposure",
+    "adc_full_scale",
 ]
 
 # ────────────────────────────────────────────────
@@ -133,3 +134,13 @@ def nearest_exposure(cfg: Dict[str, Any], target: float) -> float:
     if not ratios:
         raise ValueError("No exposures defined")
     return min(ratios, key=lambda r: abs(r - float(target)))
+
+
+def adc_full_scale(cfg: Mapping[str, Any]) -> int:
+    """Return ADC full-scale DN from configuration."""
+
+    adc_bits = int(cfg.get("sensor", {}).get("adc_bits", 0))
+    lsb_shift = int(cfg.get("sensor", {}).get("lsb_shift", 0))
+    if adc_bits <= 0:
+        return 0
+    return ((1 << adc_bits) - 1) * (1 << lsb_shift)
