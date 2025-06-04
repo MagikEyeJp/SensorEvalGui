@@ -43,9 +43,7 @@ def test_calculate_dark_noise_gain(tmp_path):
     gain_dir.mkdir(parents=True)
 
     for i in range(2):
-        tifffile.imwrite(
-            gain_dir / f"frame{i}.tiff", np.full((2, 2), i, dtype=np.uint16)
-        )
+        tifffile.imwrite(gain_dir / f"frame{i}.tiff", np.full((2, 2), i, dtype=np.uint16))
 
     roi_file = project / "roi.roi"
     roi_file.write_text("dummy")
@@ -64,9 +62,7 @@ def test_calculate_dark_noise_gain(tmp_path):
 
     cfg = load_config(cfg_file)
 
-    dsnu, rn, dsnu_map, rn_map, black = analysis.calculate_dark_noise_gain(
-        project, 0, cfg
-    )
+    dsnu, rn, dsnu_map, rn_map, black = analysis.calculate_dark_noise_gain(project, 0, cfg)
 
     assert pytest.approx(dsnu, abs=1e-6) == 0.0
     assert pytest.approx(rn, abs=1e-6) == 0.5
@@ -521,12 +517,12 @@ def test_calculate_dn_sat_uses_lsb_shift():
     assert dn_sat6 == pytest.approx(((1 << 10) - 1) * (1 << 6) * 0.95)
 
 
-def test_calculate_dn_sat_with_snr_signal():
+def test_calculate_dn_sat_with_noise_signal():
     stack = np.full((2, 2, 2), 10, dtype=np.uint16)
     cfg = {"illumination": {"sat_factor": 0.01}, "sensor": {"adc_bits": 10}}
     signal = np.array([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], dtype=float)
-    snr = np.array([1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1], dtype=float)
-    dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, snr))
+    noise = np.array([1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 2, 1.5, 1], dtype=float)
+    dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, noise))
     assert dn_sat == pytest.approx(80.0, abs=0.1)
 
 
@@ -543,15 +539,13 @@ def test_clear_cache_resets_internal_caches():
 def test_calculate_dn_sat_close_points_no_warning():
     stack = np.full((2, 2, 2), 10, dtype=np.uint16)
     cfg = {"illumination": {"sat_factor": 0.01}, "sensor": {"adc_bits": 10}}
-    signal = np.array(
-        [0, 10, 20, 30, 40, 50, 60, 70, 79.9, 80.0, 80.1, 90, 100], dtype=float
-    )
-    snr = np.array([1, 2, 3, 4, 5, 6, 5, 4, 3.1, 3.0, 2.9, 2, 1], dtype=float)
+    signal = np.array([0, 10, 20, 30, 40, 50, 60, 70, 79.9, 80.0, 80.1, 90, 100], dtype=float)
+    noise = np.array([1, 2, 3, 4, 5, 6, 7, 8, 4, 3, 2, 1, 0.5], dtype=float)
     import warnings
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, snr))
+        dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, noise))
     assert not w
     assert dn_sat == pytest.approx(80.0, abs=0.1)
 
@@ -568,9 +562,7 @@ def test_clipped_snr_model_black_level_effect():
 def test_clipped_snr_model_limit_noise_effect():
     sig = np.array([5.0, 50.0, 95.0])
     snr_base = analysis.clipped_snr_model(sig, 1.0, 100.0)
-    snr_lim = analysis.clipped_snr_model(
-        sig, 1.0, 100.0, limit_noise=5.0, limit_margin=0.1
-    )
+    snr_lim = analysis.clipped_snr_model(sig, 1.0, 100.0, limit_noise=5.0, limit_margin=0.1)
     assert snr_lim[0] < snr_base[0]
     assert snr_lim[1] == pytest.approx(snr_base[1])
     assert snr_lim[2] < snr_base[2]
