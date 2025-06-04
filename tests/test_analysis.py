@@ -109,6 +109,24 @@ def test_collect_gain_snr_signal_rows():
     assert np.allclose(snr, [9.0, 9.5])
 
 
+def test_collect_gain_snr_signal_clips_low_snr():
+    rows = [
+        {
+            "ROI Type": "grayscale",
+            "ROI No": 0,
+            "Gain (dB)": 0.0,
+            "Exposure": 1.0,
+            "Mean": 1.0,
+            "Std": 2.0,
+        }
+    ]
+    cfg = {"processing": {"exclude_abnormal_snr": False, "min_sig_factor": 0}}
+    data = analysis.collect_gain_snr_signal(rows, cfg, {0.0: 0.0})
+    sig, snr = data[0.0]
+    assert np.allclose(sig, [1.0])
+    assert np.allclose(snr, [1.0])
+
+
 def test_collect_gain_noise_signal_rows():
     rows = [
         {
