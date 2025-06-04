@@ -813,6 +813,8 @@ def collect_gain_snr_signal(
         gain = float(row.get("Gain (dB)", 0.0))
         black = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
         snr = (mean - black) / std
+        if snr < 1.0:
+            snr = 1.0
         data.setdefault(gain, []).append((mean, snr))
 
     res: Dict[float, tuple[np.ndarray, np.ndarray]] = {}
