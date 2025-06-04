@@ -173,7 +173,12 @@ def plot_snr_vs_exposure(
     thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
 
     fig = plt.figure()
-    for gain, (ratios, snr) in sorted(data.items()):
+    sorted_items = sorted(data.items())
+    ideal_gain = (
+        0.0 if any(abs(g - 0.0) < 1e-6 for g, _ in sorted_items) else sorted_items[0][0]
+    )
+
+    for gain, (ratios, snr) in sorted_items:
         ratios = _validate_positive_finite(ratios, "exposure ratios")
         snr = _validate_positive_finite(snr, "snr")
         snr_db = 20 * np.log10(snr)
@@ -186,18 +191,19 @@ def plot_snr_vs_exposure(
             linestyle="-",
             label=f"{gain:g} dB",
         )
-        base_idx = int(np.argmin(np.abs(ratios - 1.0)))
-        base_ratio = ratios[base_idx]
-        base_snr = snr[base_idx]
-        ideal = base_snr * np.sqrt(ratios / base_ratio)
-        ideal_db = 20 * np.log10(ideal)
-        plt.semilogx(
-            times,
-            ideal_db,
-            linestyle="--",
-            color="k",
-            label=f"{gain:g} dB Ideal √k",
-        )
+        if gain == ideal_gain:
+            base_idx = int(np.argmin(np.abs(ratios - 1.0)))
+            base_ratio = ratios[base_idx]
+            base_snr = snr[base_idx]
+            ideal = base_snr * np.sqrt(ratios / base_ratio)
+            ideal_db = 20 * np.log10(ideal)
+            plt.semilogx(
+                times,
+                ideal_db,
+                linestyle="--",
+                color="k",
+                label=f"{gain:g} dB Ideal √k",
+            )
     plt.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
     plt.xticks(xticks, label_strs, rotation=45)
     plt.xlabel("Exposure Time (ms)")

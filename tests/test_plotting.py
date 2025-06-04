@@ -12,6 +12,25 @@ def test_plot_snr_vs_exposure_invalid(tmp_path):
         plotting.plot_snr_vs_exposure(data, {}, tmp_path / "out.png")
 
 
+def test_plot_snr_vs_exposure_single_ideal(tmp_path):
+    data = {
+        0.0: (np.array([1.0, 2.0]), np.array([2.0, 2.828])),
+        6.0: (np.array([1.0, 2.0]), np.array([1.5, 2.1])),
+    }
+    fig = plotting.plot_snr_vs_exposure(
+        data,
+        {},
+        tmp_path / "exp.png",
+        return_fig=True,
+    )
+    ideal_lines = [
+        l
+        for l in fig.axes[0].lines
+        if l.get_color() == "k" and l.get_linestyle() == "--"
+    ]
+    assert len(ideal_lines) == 1
+
+
 def test_plot_snr_vs_signal_multi(tmp_path):
     data = {
         0.0: (np.array([1.0, 2.0]), np.array([2.0, 4.0])),
