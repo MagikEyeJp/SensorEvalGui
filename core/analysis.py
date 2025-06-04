@@ -578,8 +578,36 @@ def extract_roi_stats(
     mode = cfg.get("processing", {}).get("gain_map_mode", "none")
     apply_gain = use_gain_map and mode != "none"
     flat_cache: Dict[float, np.ndarray] = {}
+    gain_map_cache: Dict[float, np.ndarray | None] = {}
 
     for gain_db, gfold in cfgutil.gain_entries(cfg):
+        gain_dir = project_dir / gfold
+        if not gain_dir.is_dir():
+            logging.info("Skipping missing gain folder: %s", gain_dir)
+            continue
+
+        gain_map_per_gain = None
+        if apply_gain and mode != "self_fit":
+            flat_stack = flat_cache.get(gain_db)
+            if flat_stack is None:
+                flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
+                    "measurement"
+                ].get("flat_lens_folder", "LensFlat")
+                if status:
+                    status(f"Loading flat frames for gain {gain_db:.1f} dB")
+                flat_stack = _load_stack_cached(flat_folder)
+                flat_cache[gain_db] = flat_stack
+            gain_map_per_gain = gain_map_cache.get(gain_db)
+            if gain_map_per_gain is None:
+                gain_map_per_gain = get_gain_map(
+                    cfg,
+                    None,
+                    project_dir=project_dir,
+                    gain_db=gain_db,
+                    stack=flat_stack,
+                )
+                gain_map_cache[gain_db] = gain_map_per_gain
+
         for ratio, efold in cfgutil.exposure_entries(cfg):
             folder = project_dir / gfold / efold
             if not folder.is_dir():
@@ -596,25 +624,16 @@ def extract_roi_stats(
 
             corrected = stack
             if apply_gain:
-                flat_stack = None
-                if mode != "self_fit":
-                    flat_stack = flat_cache.get(gain_db)
-                    if flat_stack is None:
-                        flat_folder = cfgutil.find_gain_folder(
-                            project_dir, gain_db, cfg
-                        ) / cfg["measurement"].get("flat_lens_folder", "LensFlat")
-                        if status:
-                            status(f"Loading flat frames for gain {gain_db:.1f} dB")
-                        flat_stack = _load_stack_cached(flat_folder)
-                        flat_cache[gain_db] = flat_stack
-                stack_fit = stack if mode == "self_fit" else flat_stack
-                gain_map = get_gain_map(
-                    cfg,
-                    None,
-                    project_dir=project_dir,
-                    gain_db=gain_db,
-                    stack=stack_fit,
-                )
+                if mode == "self_fit":
+                    gain_map = get_gain_map(
+                        cfg,
+                        None,
+                        project_dir=project_dir,
+                        gain_db=gain_db,
+                        stack=stack,
+                    )
+                else:
+                    gain_map = gain_map_per_gain
                 corrected = stack if gain_map is None else stack / gain_map
 
             rects = chart_rects if "chart" in efold.lower() else flat_rects
