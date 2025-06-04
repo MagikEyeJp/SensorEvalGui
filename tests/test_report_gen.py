@@ -45,7 +45,11 @@ def test_report_html_summary_text(tmp_path):
 
 
 def test_save_snr_signal_json(tmp_path):
-    cfg_data = {"output": {"snr_signal_data": True}, "sensor": {"adc_bits": 8}}
+    cfg_data = {
+        "output": {"snr_signal_data": True},
+        "sensor": {"adc_bits": 8},
+        "processing": {"snr_fit": {"num_points": 10}},
+    }
     cfg_file = tmp_path / "config.yaml"
     with cfg_file.open("w", encoding="utf-8") as fh:
         yaml.safe_dump(cfg_data, fh)
@@ -57,4 +61,4 @@ def test_save_snr_signal_json(tmp_path):
     txt = json.loads(out_file.read_text(encoding="utf-8"))
     assert "0" in txt
     assert txt["0"]["signal"][0] == pytest.approx(1.0)
-    assert len(txt["0"]["fit_signal"]) == 400
+    assert len(txt["0"]["fit_signal"]) == 10

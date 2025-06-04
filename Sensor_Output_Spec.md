@@ -73,6 +73,9 @@ Gainごとに下記項目を出力
   * DN\_satの基準：config.reference.sat\_factor
 * **DN @ SNR=10dB**：SNRカーブから、SNRが10dB（config.processing.snr\_threshold\_dB）を超える最小DN値をPスプライン回帰曲線から推定。
 * **DN @ SNR=1 (0 dB)**：SNRが1となる最小信号レベル（ノイズと等価）を同回帰曲線から推定。
+  * SNRカーブのロバストPスプライン回帰は `processing.snr_fit` セクションで
+    次のパラメータを調整できる:
+    `deg`, `n_splines`, `lam`, `knot_density`, `robust`, `num_points`。
 
 #### 2. `roi_stats.csv`
 
@@ -236,6 +239,13 @@ processing:
   read_noise_mode: 0          # 0:スタックstd, 1:差分std/√2
   prnu_fit: LS                # LS:最小二乗法 WLS:加重最小二乗法
   exclude_abnormal_snr: true  # SNRが極端に低いROIを除外
+  snr_fit:
+    deg: 3                # P-スプライン次数
+    n_splines: auto       # スプライン数または 'auto'
+    lam: null             # スムージング係数(nullで自動探索)
+    knot_density: auto    # 'auto' or 'uniform'
+    robust: huber         # ロバスト重み関数
+    num_points: 400       # 出力曲線のポイント数
 
 plot:
   exposures: [1.0, 0.0625]    # 図1に描画する露光倍率

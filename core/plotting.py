@@ -65,7 +65,9 @@ def plot_snr_vs_signal_multi(
     logging.info("plot_snr_vs_signal_multi: output=%s", output_path)
     log_memory_usage("plot start: ")
 
-    thresh = cfg.get("processing", {}).get("snr_threshold_dB", 10.0)
+    processing_cfg = cfg.get("processing", {})
+    snr_cfg = processing_cfg.get("snr_fit", {})
+    thresh = processing_cfg.get("snr_threshold_dB", 10.0)
     fig, ax_snr = plt.subplots()
 
     adc_full_scale = cfgutil.adc_full_scale(cfg)
@@ -106,7 +108,17 @@ def plot_snr_vs_signal_multi(
 
         bl = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
         xs, snr_fit = analysis.fit_snr_signal_model(
-            sig_p, snr_p, adc_full_scale, black_level=bl, max_signal=limit
+            sig_p,
+            snr_p,
+            adc_full_scale,
+            black_level=bl,
+            deg=int(snr_cfg.get("deg", 3)),
+            n_splines=snr_cfg.get("n_splines", "auto"),
+            lam=snr_cfg.get("lam"),
+            knot_density=snr_cfg.get("knot_density", "auto"),
+            robust=snr_cfg.get("robust", "huber"),
+            num_points=int(snr_cfg.get("num_points", 400)),
+            max_signal=limit,
         )
         snr_fit = np.maximum(snr_fit, 0.0)
         ax_snr.loglog(
