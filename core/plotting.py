@@ -84,7 +84,7 @@ def plot_snr_vs_signal_multi(
         )
 
         bl = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
-        xs, snr_fit = analysis.fit_three_region_snr_model(
+        xs, snr_fit = analysis.fit_snr_signal_model(
             sig, snr, adc_full_scale, black_level=bl
         )
         ax_snr.loglog(

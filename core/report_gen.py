@@ -213,7 +213,7 @@ def save_snr_signal_json(
         out: Dict[str, Any] = {}
         for gain, (sig, snr) in sorted(data.items()):
             bl = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
-            xs, snr_fit = analysis.fit_three_region_snr_model(
+            xs, snr_fit = analysis.fit_snr_signal_model(
                 sig, snr, full_scale, black_level=bl
             )
             out[f"{gain:g}"] = {

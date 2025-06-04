@@ -46,7 +46,7 @@ __all__ = [
     "get_gain_map",
     "clipped_snr_model",
     "fit_clipped_snr_model",
-    "fit_three_region_snr_model",
+    "fit_snr_signal_model",
     "calculate_gain_map",
     "calculate_prnu_residual",
 ]
@@ -1506,7 +1506,7 @@ def fit_clipped_snr_model(
     return float(popt[0]), float(limit_noise)
 
 
-def fit_three_region_snr_model(
+def fit_snr_signal_model(
     signal: np.ndarray,
     snr: np.ndarray,
     adc_full_scale: float,
