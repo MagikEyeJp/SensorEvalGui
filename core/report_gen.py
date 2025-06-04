@@ -200,8 +200,15 @@ def save_snr_signal_json(
     path: Path,
     *,
     black_levels: Dict[float, float] | None = None,
+    dn_sat: float | Dict[float, float] | None = None,
 ) -> None:
-    """Save SNR-Signal data and fitted curves as JSON."""
+    """Save SNR-Signal data and fitted curves as JSON.
+
+    Parameters
+    ----------
+    dn_sat:
+        Optional saturation level(s) to clip the SNR data before fitting.
+    """
 
     import numpy as np
     from . import analysis
@@ -213,13 +220,31 @@ def save_snr_signal_json(
         out: Dict[str, Any] = {}
         for gain, (sig, snr) in sorted(data.items()):
             bl = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
+            limit = None
+            if isinstance(dn_sat, dict):
+                limit = dn_sat.get(gain)
+            elif dn_sat is not None:
+                limit = dn_sat
+
+            if limit is not None and np.isfinite(limit):
+                mask = sig <= limit
+                sig_use = sig[mask]
+                snr_use = snr[mask]
+            else:
+                sig_use = sig
+                snr_use = snr
+
             xs, snr_fit = analysis.fit_snr_signal_model(
-                sig, snr, full_scale, black_level=bl
+                sig_use,
+                snr_use,
+                full_scale,
+                black_level=bl,
+                max_signal=limit,
             )
             snr_fit = np.maximum(snr_fit, 0.0)
             out[f"{gain:g}"] = {
-                "signal": sig.tolist(),
-                "snr": snr.tolist(),
+                "signal": sig_use.tolist(),
+                "snr": snr_use.tolist(),
                 "fit_signal": xs.tolist(),
                 "fit_snr": snr_fit.tolist(),
             }

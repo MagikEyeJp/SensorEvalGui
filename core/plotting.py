@@ -52,8 +52,16 @@ def plot_snr_vs_signal_multi(
     return_fig: bool = False,
     interp_points: int | None = None,
     black_levels: Dict[float, float] | None = None,
+    dn_sat: float | Dict[float, float] | None = None,
 ) -> Figure | None:
-    """Plot SNR–Signal curves for multiple gains."""
+    """Plot SNR–Signal curves for multiple gains.
+
+    Parameters
+    ----------
+    dn_sat:
+        Optional saturation level(s). If provided, points with signal above the
+        threshold are ignored when plotting and fitting.
+    """
     logging.info("plot_snr_vs_signal_multi: output=%s", output_path)
     log_memory_usage("plot start: ")
 
@@ -72,11 +80,24 @@ def plot_snr_vs_signal_multi(
         if sig.size == 1 or snr.size == 1:
             sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
             snr = np.asarray([snr[0] * 0.9, snr[0] * 1.1])
-        all_signals.append(sig)
+        limit = None
+        if isinstance(dn_sat, dict):
+            limit = dn_sat.get(gain)
+        elif dn_sat is not None:
+            limit = dn_sat
+        if limit is not None and np.isfinite(limit):
+            mask = sig <= limit
+            sig_p = sig[mask]
+            snr_p = snr[mask]
+        else:
+            sig_p = sig
+            snr_p = snr
+
+        all_signals.append(sig_p)
         color = ax_snr._get_lines.get_next_color()
         ax_snr.loglog(
-            sig,
-            20 * np.log10(snr),
+            sig_p,
+            20 * np.log10(snr_p),
             linestyle="None",
             marker="o",
             color=color,
@@ -85,7 +106,7 @@ def plot_snr_vs_signal_multi(
 
         bl = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
         xs, snr_fit = analysis.fit_snr_signal_model(
-            sig, snr, adc_full_scale, black_level=bl
+            sig_p, snr_p, adc_full_scale, black_level=bl, max_signal=limit
         )
         snr_fit = np.maximum(snr_fit, 0.0)
         ax_snr.loglog(

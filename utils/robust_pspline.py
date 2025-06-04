@@ -153,7 +153,7 @@ def robust_p_spline_fit(
     lam: float | None = None,
     knot_density: str = "auto",
     robust: str = "huber",
-    num_points: int = 200,
+    num_points: int = 400,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Fit a robust P-spline and return curve and 95% CI."""
     x_arr = np.asarray(x, dtype=float)
