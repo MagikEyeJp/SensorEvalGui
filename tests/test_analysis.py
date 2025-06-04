@@ -582,3 +582,12 @@ def test_fit_clipped_snr_model_estimates_limit_noise():
     rn, ln = analysis.fit_clipped_snr_model(sig, snr, 100.0, limit_margin=0.1)
     assert rn == pytest.approx(2.0, rel=0.1)
     assert ln == pytest.approx(5.0, rel=0.1)
+
+
+def test_fit_three_region_snr_model_basic():
+    sig = np.linspace(0, 100, 20)
+    snr = analysis.clipped_snr_model(sig, 2.0, 100.0)
+    xs, fit = analysis.fit_three_region_snr_model(sig, snr, 100.0)
+    assert xs.shape == (200,)
+    assert fit.shape == (200,)
+    assert np.isfinite(fit).all()

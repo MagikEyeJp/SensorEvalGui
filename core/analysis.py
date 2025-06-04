@@ -45,6 +45,7 @@ __all__ = [
     "get_gain_map",
     "clipped_snr_model",
     "fit_clipped_snr_model",
+    "fit_three_region_snr_model",
     "calculate_gain_map",
     "calculate_pseudo_prnu",
     "calculate_prnu_residual",
@@ -1662,3 +1663,102 @@ def fit_clipped_snr_model(
     except Exception:
         return 1.0, float(limit_noise)
     return float(popt[0]), float(limit_noise)
+
+
+def fit_three_region_snr_model(
+    signal: np.ndarray,
+    snr: np.ndarray,
+    adc_full_scale: float,
+    black_level: float = 0.0,
+    *,
+    num_points: int = 200,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return SNR fit curve using three regions.
+
+    Low and high regions are fitted with :func:`clipped_snr_model`. The middle
+    region is approximated by a second-order polynomial. Boundaries are blended
+    at the intersection points of adjacent curves by averaging the values.
+    """
+
+    signal = np.asarray(signal, dtype=float)
+    snr = np.asarray(snr, dtype=float)
+
+    mask = np.isfinite(signal) & np.isfinite(snr)
+    signal = signal[mask]
+    snr = snr[mask]
+    if signal.size == 0:
+        xs = np.linspace(0.0, 1.0, num_points)
+        return xs, np.full_like(xs, np.nan)
+
+    order = np.argsort(signal)
+    signal = signal[order]
+    snr = snr[order]
+
+    n = signal.size
+    b1 = signal[n // 3]
+    b2 = signal[(2 * n) // 3]
+
+    mask1 = signal <= b1
+    mask2 = (signal > b1) & (signal <= b2)
+    mask3 = signal > b2
+
+    sig1, snr1 = signal[mask1], snr[mask1]
+    sig2, snr2 = signal[mask2], snr[mask2]
+    sig3, snr3 = signal[mask3], snr[mask3]
+
+    rn1, ln1 = fit_clipped_snr_model(
+        sig1, snr1, adc_full_scale, black_level=black_level
+    )
+    rn3, ln3 = fit_clipped_snr_model(
+        sig3, snr3, adc_full_scale, black_level=black_level
+    )
+
+    deg = 2 if sig2.size >= 3 else 1
+    if sig2.size == 0:
+        coefs2 = np.polyfit(signal, snr, deg=min(2, n - 1))
+    else:
+        coefs2 = np.polyfit(sig2, snr2, deg=deg)
+
+    def f1(x: np.ndarray) -> np.ndarray:
+        return clipped_snr_model(
+            x,
+            rn1,
+            adc_full_scale,
+            black_level=black_level,
+            limit_noise=ln1,
+        )
+
+    def f2(x: np.ndarray) -> np.ndarray:
+        return np.polyval(coefs2, x)
+
+    def f3(x: np.ndarray) -> np.ndarray:
+        return clipped_snr_model(
+            x,
+            rn3,
+            adc_full_scale,
+            black_level=black_level,
+            limit_noise=ln3,
+        )
+
+    xs = np.linspace(float(signal.min()), float(signal.max()), num_points)
+    y1 = f1(xs)
+    y2 = f2(xs)
+    y3 = f3(xs)
+
+    idx12 = int(np.argmin(np.abs(y1 - y2)))
+    idx23 = int(np.argmin(np.abs(y2 - y3)))
+
+    y = np.empty_like(xs)
+    for i, x in enumerate(xs):
+        if i < idx12:
+            y[i] = y1[i]
+        elif i == idx12:
+            y[i] = 0.5 * (y1[i] + y2[i])
+        elif i < idx23:
+            y[i] = y2[i]
+        elif i == idx23:
+            y[i] = 0.5 * (y2[i] + y3[i])
+        else:
+            y[i] = y3[i]
+
+    return xs, y

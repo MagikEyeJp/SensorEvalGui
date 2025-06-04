@@ -216,16 +216,8 @@ def save_snr_signal_json(
         out: Dict[str, Any] = {}
         for gain, (sig, snr) in sorted(data.items()):
             bl = 0.0 if black_levels is None else float(black_levels.get(gain, 0.0))
-            rn, ln = analysis.fit_clipped_snr_model(
+            xs, snr_fit = analysis.fit_three_region_snr_model(
                 sig, snr, full_scale, black_level=bl
-            )
-            xs = np.linspace(float(sig.min()), float(sig.max()), 200)
-            snr_fit = analysis.clipped_snr_model(
-                xs,
-                rn,
-                full_scale,
-                black_level=bl,
-                limit_noise=ln,
             )
             out[f"{gain:g}"] = {
                 "signal": sig.tolist(),
