@@ -58,7 +58,7 @@ processing:
     deg: 3                        # Polynomial degree for P-spline fit
     n_splines: auto               # Number of B-splines or 'auto'
     lam: null                     # Smoothing parameter or null
-    knot_density: auto            # 'auto' or 'uniform'
+    knot_density: auto            # 'auto' | 'uniform' | 'endpoint' | 'adaptive'
     robust: huber                 # Robust weight function
     num_points: 400               # Points in fitted curve
 

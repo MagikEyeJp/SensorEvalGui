@@ -15,20 +15,39 @@ _DEF_N_RANGE = np.arange(10, 31, 5)
 
 
 def _design_matrix(
-    x: np.ndarray, deg: int, n_splines: int, knot_density: str
+    x: np.ndarray,
+    deg: int,
+    n_splines: int,
+    knot_density: str,
+    y: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     x_min = float(x.min())
     x_max = float(x.max())
     n_inner = n_splines - deg - 1
     if n_inner < 0:
         raise ValueError("n_splines too small for degree")
-    if knot_density == "auto" and n_inner > 0:
-        interior = np.quantile(x, np.linspace(0, 1, n_inner + 2)[1:-1])
-    else:
-        if n_inner > 0:
+    if n_inner > 0:
+        if knot_density == "auto":
+            interior = np.quantile(x, np.linspace(0, 1, n_inner + 2)[1:-1])
+        elif knot_density == "uniform":
             interior = np.linspace(x_min, x_max, n_inner + 2)[1:-1]
+        elif knot_density == "endpoint":
+            t = np.linspace(0, np.pi, n_inner + 2)[1:-1]
+            interior = x_min + (x_max - x_min) * 0.5 * (1 - np.cos(t))
+        elif knot_density == "adaptive" and y is not None:
+            mask = np.concatenate([[True], np.diff(x) > 0])
+            x_u = x[mask]
+            y_u = y[mask]
+            grad = np.abs(np.gradient(y_u, x_u, edge_order=1))
+            grad = np.interp(x, x_u, grad)
+            weights = grad + 0.1 * grad.max()
+            cdf = np.cumsum(weights)
+            cdf /= cdf[-1]
+            interior = np.interp(np.linspace(0, 1, n_inner + 2)[1:-1], cdf, x)
         else:
-            interior = np.array([])
+            interior = np.linspace(x_min, x_max, n_inner + 2)[1:-1]
+    else:
+        interior = np.array([])
     knots = np.concatenate(
         [
             np.full(deg + 1, x_min),
@@ -133,7 +152,7 @@ def _search_params(
     best = (lam_vals[0], int(n_vals[0]))
 
     for n in n_vals:
-        knots, B = _design_matrix(x, deg, int(n), knot_density)
+        knots, B = _design_matrix(x, deg, int(n), knot_density, y)
         D = _diff_penalty(B.shape[1])
         for lam_v in lam_vals:
             coef, _, w = _irls(B, y, lam_v, D, robust=robust, weights=weights)
@@ -155,7 +174,16 @@ def robust_p_spline_fit(
     robust: str = "huber",
     num_points: int = 400,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Fit a robust P-spline and return curve and 95% CI."""
+    """Fit a robust P-spline and return curve and 95% CI.
+
+    Parameters
+    ----------
+    knot_density:
+        "auto"  : knots at quantiles of ``x``.
+        "uniform": equidistant knots.
+        "endpoint": knots concentrated near the ends.
+        "adaptive": density follows gradient of ``y``.
+    """
     x_arr = np.asarray(x, dtype=float)
     y_arr = np.asarray(y, dtype=float)
     mask = np.isfinite(x_arr) & np.isfinite(y_arr)
@@ -185,7 +213,7 @@ def robust_p_spline_fit(
         x_aug, y_aug, deg, knot_density, lam, n_splines, robust, w
     )
 
-    knots, B = _design_matrix(x_aug, deg, n_opt, knot_density)
+    knots, B = _design_matrix(x_aug, deg, n_opt, knot_density, y_aug)
     D = _diff_penalty(B.shape[1])
     coef, res, weights = _irls(B, y_aug, lam_opt, D, robust=robust, weights=w)
 

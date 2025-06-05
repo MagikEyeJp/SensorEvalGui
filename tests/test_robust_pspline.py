@@ -13,3 +13,16 @@ def test_robust_p_spline_simple():
     assert x_dense.size == 400
     assert y_pred.shape == x_dense.shape
     assert np.all(upper >= lower)
+
+
+def test_robust_p_spline_endpoint_adaptive():
+    rng = np.random.default_rng(1)
+    x = np.linspace(0.0, 1.0, 20)
+    y = np.exp(x * 3) + rng.normal(scale=0.1, size=x.size)
+    for mode in ["endpoint", "adaptive"]:
+        x_dense, y_pred, upper, lower = robust_p_spline_fit(
+            x, y, deg=3, n_splines=15, lam=0.1, knot_density=mode
+        )
+        assert x_dense.size == 400
+        assert y_pred.shape == x_dense.shape
+        assert np.all(upper >= lower)
