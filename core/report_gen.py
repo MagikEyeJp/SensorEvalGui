@@ -139,7 +139,7 @@ def report_html(
             "DSNU",
             "DN_sat",
             "Pseudo PRNU",
-            "System Sensitivity",
+            "SensitivityDN",
         ],
     )
 

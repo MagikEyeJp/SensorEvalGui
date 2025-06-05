@@ -9,7 +9,7 @@ d gainmapをflat_frameにしたとき、ガウシアンLPFをかけてPRNUの高
 
 ----- 完了
 C PRNU residualのグラフ上部にある1e-11はなんの意味か -> スケール
-D System Sensitivityに露出倍率が考慮されていない
+D SensitivityDNに露出倍率が考慮されていない
 D PRNU Regresion に全てのGainをのせる
 D SNR-Exposureの10dBラインが軸の数値と合ってない
 D SNR-Exposureに√k線をひけるか
