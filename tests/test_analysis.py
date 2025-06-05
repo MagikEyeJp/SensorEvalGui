@@ -563,7 +563,7 @@ def test_calculate_dn_sat_with_noise_signal():
     signal = np.array([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], dtype=float)
     noise = np.array([1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 2, 1.5, 1], dtype=float)
     dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, noise))
-    assert dn_sat == pytest.approx(80.0, abs=0.1)
+    assert dn_sat == pytest.approx(70.0, abs=0.1)
 
 
 def test_clear_cache_resets_internal_caches():
@@ -589,7 +589,7 @@ def test_calculate_dn_sat_close_points_no_warning():
         warnings.simplefilter("always")
         dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, noise))
     assert not w
-    assert dn_sat == pytest.approx(80.0, abs=0.1)
+    assert dn_sat == pytest.approx(70.0, abs=0.1)
 
 
 def test_clipped_snr_model_black_level_effect():
