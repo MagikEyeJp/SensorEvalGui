@@ -1117,13 +1117,15 @@ def _estimate_sat_from_noise(signal: np.ndarray, noise: np.ndarray) -> float:
 
     if sig.size >= 4:
         try:
-            spline = UnivariateSpline(sig, n, s=0.2, k=3)
-            d1 = spline.derivative(1)(sig)
+            spline = UnivariateSpline(sig, n, s=0.0, k=3)
+            xs = np.linspace(float(sig.min()), float(sig.max()), max(5 * sig.size, 400))
+            second = spline.derivative(2)(xs)
+            idx_drop = int(np.argmin(second[::-1]))
+            return float(xs[::-1][idx_drop])
         except Exception:
-            d1 = np.gradient(n, sig)
-    else:
-        d1 = np.gradient(n, sig)
+            pass
 
+    d1 = np.gradient(n, sig)
     idx_drop = int(np.argmin(d1))
     return float(sig[idx_drop])
 
@@ -1633,4 +1635,45 @@ def fit_snr_signal_model(
         ys = ys[mask]
 
     ys = np.maximum.accumulate(np.maximum(ys, 0.0))
+    return xs, ys
+
+
+def fit_noise_signal_model(
+    signal: np.ndarray,
+    noise: np.ndarray,
+    *,
+    deg: int = 3,
+    n_splines: int | str = "auto",
+    lam: float | None = None,
+    knot_density: str = "auto",
+    robust: str = "huber",
+    num_points: int = 400,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return smoothed Noise curve using a robust P-spline fit."""
+
+    signal = np.asarray(signal, dtype=float)
+    noise = np.asarray(noise, dtype=float)
+
+    mask = np.isfinite(signal) & np.isfinite(noise)
+    signal = signal[mask]
+    noise = noise[mask]
+    if signal.size == 0:
+        xs = np.linspace(0.0, 1.0, num_points)
+        return xs, np.full_like(xs, np.nan)
+
+    order = np.argsort(signal)
+    signal = signal[order]
+    noise = noise[order]
+
+    xs, ys, _, _ = robust_p_spline_fit(
+        signal,
+        noise,
+        deg=deg,
+        n_splines=n_splines,
+        lam=lam,
+        knot_density=knot_density,
+        robust=robust,
+        num_points=num_points,
+    )
+
     return xs, ys

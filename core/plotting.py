@@ -167,13 +167,29 @@ def plot_noise_vs_signal_multi(
     logging.info("plot_noise_vs_signal_multi: output=%s", output_path)
     fig, ax = plt.subplots()
 
+    proc_cfg = cfg.get("processing", {})
+    fit_cfg = proc_cfg.get("snr_fit", {})
     for gain, (sig, noise) in sorted(data.items()):
         sig = _validate_positive_finite(sig, "signal")
         noise = _validate_positive_finite(noise, "noise")
         if sig.size == 1 or noise.size == 1:
             sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
             noise = np.asarray([noise[0] * 0.9, noise[0] * 1.1])
-        ax.loglog(sig, noise, marker="o", linestyle="-", label=f"{gain:g}dB")
+        color = ax._get_lines.get_next_color()
+        ax.loglog(
+            sig, noise, marker="o", linestyle="None", color=color, label=f"{gain:g}dB"
+        )
+        xs, ys = analysis.fit_noise_signal_model(
+            sig,
+            noise,
+            deg=int(fit_cfg.get("deg", 3)),
+            n_splines=fit_cfg.get("n_splines", "auto"),
+            lam=fit_cfg.get("lam"),
+            knot_density=fit_cfg.get("knot_density", "auto"),
+            robust=fit_cfg.get("robust", "huber"),
+            num_points=int(fit_cfg.get("num_points", 400)),
+        )
+        ax.loglog(xs, ys, linestyle="-", color=color, label="_nolegend_")
 
     ax.set_xlabel("Signal (DN)")
     ax.set_ylabel("Noise (DN)")
