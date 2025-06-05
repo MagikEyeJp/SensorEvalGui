@@ -121,13 +121,17 @@ def plot_snr_vs_signal_multi(
             max_signal=limit,
         )
         snr_fit = np.maximum(snr_fit, 0.0)
-        ax_snr.loglog(
-            xs,
-            20 * np.log10(np.maximum(snr_fit, 1e-12)),
-            linestyle="-",
-            color=color,
-            label="_nolegend_",
-        )
+        mask = snr_fit > 1.0
+        xs = xs[mask]
+        snr_fit = snr_fit[mask]
+        if xs.size:
+            ax_snr.loglog(
+                xs,
+                20 * np.log10(snr_fit),
+                linestyle="-",
+                color=color,
+                label="_nolegend_",
+            )
 
     if all_signals:
         concat = np.concatenate(all_signals)
