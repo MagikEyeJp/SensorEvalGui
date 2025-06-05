@@ -141,21 +141,27 @@ def run_pipeline(
             log_memory_usage("after roi stats: ")
             if progress:
                 progress(10)
-            tuples = sorted(stats.items(), key=lambda kv: kv[1]["mean"])
-            signals = np.array([kv[1]["mean"] for kv in tuples])
-            noises = np.array([kv[1]["std"] for kv in tuples])
-            snr_lin = signals / noises
-            ratios = np.array([kv[0][1] for kv in tuples])
-
-            fit_cfg = cfg.get("processing", {}).get("snr_fit", {})
-            adc_full_scale = cfgutil.adc_full_scale(cfg)
-
             black_levels: Dict[float, float] = {}
             for gain_db, _ in cfgutil.gain_entries(cfg):
                 _, _, _, _, bl = calculate_dark_noise_gain(
                     project, gain_db, cfg, status=status
                 )
                 black_levels[gain_db] = bl
+
+            tuples = sorted(stats.items(), key=lambda kv: kv[1]["mean"])
+            signals = np.array([kv[1]["mean"] for kv in tuples])
+            noises = np.array([kv[1]["std"] for kv in tuples])
+            snr_lin = np.array(
+                [
+                    (kv[1]["mean"] - black_levels.get(kv[0][0], 0.0)) / kv[1]["std"]
+                    for kv in tuples
+                ]
+            )
+            snr_lin = np.maximum(snr_lin, 1.0)
+            ratios = np.array([kv[0][1] for kv in tuples])
+
+            fit_cfg = cfg.get("processing", {}).get("snr_fit", {})
+            adc_full_scale = cfgutil.adc_full_scale(cfg)
 
             roi_table = extract_roi_table(project, cfg)
             snr_signal_data = collect_gain_snr_signal(roi_table, cfg, black_levels)
@@ -264,7 +270,7 @@ def run_pipeline(
                 if tuples_g:
                     sig_g = np.array([kv[1]["mean"] for kv in tuples_g])
                     noise_g = np.array([kv[1]["std"] for kv in tuples_g])
-                    snr_lin_g = sig_g / noise_g
+                    snr_lin_g = np.maximum((sig_g - black_level) / noise_g, 1.0)
                     dn_at_10_g = calculate_dn_at_snr_pspline(
                         sig_g,
                         snr_lin_g,
