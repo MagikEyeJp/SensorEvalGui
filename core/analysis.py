@@ -1559,7 +1559,7 @@ def fit_snr_signal_model(
         the fitted curve is truncated accordingly.
     """
 
-    signal = np.asarray(signal, dtype=float)
+    signal = np.asarray(signal, dtype=float) - black_level
     snr = np.asarray(snr, dtype=float)
 
     mask = np.isfinite(signal) & np.isfinite(snr)

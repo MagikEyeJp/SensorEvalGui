@@ -629,3 +629,29 @@ def test_fit_three_region_snr_model_basic():
     assert xs.shape == (400,)
     assert fit.shape == (400,)
     assert np.isfinite(fit).all()
+
+
+def test_fit_snr_signal_model_black_level_shift():
+    sig = np.linspace(10.0, 110.0, 20)
+    black = 10.0
+    snr = analysis.clipped_snr_model(sig, 1.0, 120.0, black_level=black)
+    xs1, fit1 = analysis.fit_snr_signal_model(
+        sig,
+        snr,
+        120.0,
+        black_level=black,
+        n_splines=20,
+        lam=0.001,
+    )
+    xs2, fit2 = analysis.fit_snr_signal_model(
+        sig - black,
+        snr,
+        120.0 - black,
+        black_level=0.0,
+        n_splines=20,
+        lam=0.001,
+    )
+    assert np.allclose(xs1, xs2 + black)
+    assert np.allclose(fit1, fit2)
+    interp = np.interp(sig, xs1, fit1)
+    assert np.allclose(interp, snr, rtol=0.05)
