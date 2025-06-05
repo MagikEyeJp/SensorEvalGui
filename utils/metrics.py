@@ -10,7 +10,7 @@ METRIC_UNITS: dict[str, str] = {
     "DSNU": "DN",
     "DN_sat": "",
     "Pseudo PRNU": "%",
-    "System Sensitivity": "DN / μW·cm²·s",
+    "SensitivityDN": "DN / μW·cm²·s",
 }
 
 

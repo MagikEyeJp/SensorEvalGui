@@ -58,7 +58,7 @@ from core.analysis import (
     collect_gain_snr_signal,
     collect_gain_noise_signal,
     collect_prnu_points,
-    calculate_dn_at_snr,
+    calculate_dn_at_snr_pspline,
     calculate_snr_at_half,
     calculate_dn_at_snr_one,
     calculate_prnu_residual,
@@ -146,6 +146,9 @@ def run_pipeline(
             noises = np.array([kv[1]["std"] for kv in tuples])
             snr_lin = signals / noises
             ratios = np.array([kv[0][1] for kv in tuples])
+
+            fit_cfg = cfg.get("processing", {}).get("snr_fit", {})
+            adc_full_scale = cfgutil.adc_full_scale(cfg)
 
             black_levels: Dict[float, float] = {}
             for gain_db, _ in cfgutil.gain_entries(cfg):
@@ -262,13 +265,33 @@ def run_pipeline(
                     sig_g = np.array([kv[1]["mean"] for kv in tuples_g])
                     noise_g = np.array([kv[1]["std"] for kv in tuples_g])
                     snr_lin_g = sig_g / noise_g
-                    dn_at_10_g = calculate_dn_at_snr(
+                    dn_at_10_g = calculate_dn_at_snr_pspline(
                         sig_g,
                         snr_lin_g,
                         cfg["processing"].get("snr_threshold_dB", 10.0),
+                        adc_full_scale,
+                        black_level,
+                        deg=int(fit_cfg.get("deg", 3)),
+                        n_splines=fit_cfg.get("n_splines", "auto"),
+                        lam=fit_cfg.get("lam"),
+                        knot_density=fit_cfg.get("knot_density", "auto"),
+                        robust=fit_cfg.get("robust", "huber"),
+                        num_points=int(fit_cfg.get("num_points", 400)),
                     )
                     snr_at_50_g = calculate_snr_at_half(sig_g, snr_lin_g, dn_sat_gain)
-                    dn_at_0_g = calculate_dn_at_snr_one(sig_g, snr_lin_g)
+                    dn_at_0_g = calculate_dn_at_snr_pspline(
+                        sig_g,
+                        snr_lin_g,
+                        0.0,
+                        adc_full_scale,
+                        black_level,
+                        deg=int(fit_cfg.get("deg", 3)),
+                        n_splines=fit_cfg.get("n_splines", "auto"),
+                        lam=fit_cfg.get("lam"),
+                        knot_density=fit_cfg.get("knot_density", "auto"),
+                        robust=fit_cfg.get("robust", "huber"),
+                        num_points=int(fit_cfg.get("num_points", 400)),
+                    )
                 else:
                     dn_at_10_g = float("nan")
                     snr_at_50_g = float("nan")
@@ -282,7 +305,7 @@ def run_pipeline(
                     "Black level": black_level,
                     "DN_sat": dn_sat_gain,
                     "Pseudo PRNU": prnu,
-                    "System Sensitivity": sens,
+                    "SensitivityDN": sens,
                     "DN @ 10 dB": dn_at_10_g,
                     "SNR @ 50%": snr_at_50_g,
                     "DN @ 0 dB": dn_at_0_g,
@@ -303,11 +326,33 @@ def run_pipeline(
             prnu = float(np.mean(prnu_list)) if prnu_list else float("nan")
             system_sens = float(np.mean(sens_list)) if sens_list else float("nan")
             black_level = float(np.mean(black_list)) if black_list else 0.0
-            dn_at_10 = calculate_dn_at_snr(
-                signals, snr_lin, cfg["processing"].get("snr_threshold_dB", 10.0)
+            dn_at_10 = calculate_dn_at_snr_pspline(
+                signals,
+                snr_lin,
+                cfg["processing"].get("snr_threshold_dB", 10.0),
+                adc_full_scale,
+                black_level,
+                deg=int(fit_cfg.get("deg", 3)),
+                n_splines=fit_cfg.get("n_splines", "auto"),
+                lam=fit_cfg.get("lam"),
+                knot_density=fit_cfg.get("knot_density", "auto"),
+                robust=fit_cfg.get("robust", "huber"),
+                num_points=int(fit_cfg.get("num_points", 400)),
             )
             snr_at_50 = calculate_snr_at_half(signals, snr_lin, dn_sat)
-            dn_at_0 = calculate_dn_at_snr_one(signals, snr_lin)
+            dn_at_0 = calculate_dn_at_snr_pspline(
+                signals,
+                snr_lin,
+                0.0,
+                adc_full_scale,
+                black_level,
+                deg=int(fit_cfg.get("deg", 3)),
+                n_splines=fit_cfg.get("n_splines", "auto"),
+                lam=fit_cfg.get("lam"),
+                knot_density=fit_cfg.get("knot_density", "auto"),
+                robust=fit_cfg.get("robust", "huber"),
+                num_points=int(fit_cfg.get("num_points", 400)),
+            )
 
             log_memory_usage("after metrics: ")
             if progress:
@@ -324,7 +369,7 @@ def run_pipeline(
                 "Black level": black_level,
                 "DN_sat": dn_sat,
                 "Pseudo PRNU": prnu,
-                "System Sensitivity": system_sens,
+                "SensitivityDN": system_sens,
                 "DN @ 10 dB": dn_at_10,
                 "SNR @ 50%": snr_at_50,
                 "DN @ 0 dB": dn_at_0,

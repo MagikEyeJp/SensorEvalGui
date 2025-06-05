@@ -36,8 +36,8 @@ Gainごとに下記画像セットを入力とする。それぞれ10枚以上�
 
 Gainごとに下記項目を出力
 
-* **System Sensitivity (DN / μW·cm⁻²·s)**：フラット画像(各露光条件) のフラットROIの平均DNを、照度 power_uW_cm2（μW/cm²）×露光時間 exposure_ms（ms）x 露光倍率 で割って計算する。
-※ conversion gainが不明のため、DN感度 `System Sensitivity (DN / μW·cm²·s)` を出力し、レンズ込みの実効感度とする。
+* **SensitivityDN (DN / μW·cm⁻²·s)**：フラット画像(各露光条件) のフラットROIの平均DNを、照度 power_uW_cm2（μW/cm²）×露光時間 exposure_ms（ms）x 露光倍率 で割って計算する。
+※ conversion gainが不明のため、DN感度 `SensitivityDN (DN / μW·cm²·s)` を出力し、レンズ込みの実効感度とする。
   * 使用項目：
     * power_uW_cm2 フラット画像のパワーメータ測定値
     * exposure_ms フラット画像の露出時間
@@ -273,7 +273,7 @@ output:
     - DSNU (DN)
     - DN_sat
     - PRNU (%)
-    - System Sensitivity
+    - SensitivityDN
 
 logging:
   level: INFO             # ログ出力レベルを指定

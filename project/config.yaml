@@ -85,7 +85,7 @@ output:
     - DSNU
     - DN_sat
     - Pseudo PRNU
-    - System Sensitivity
+    - SensitivityDN
 
 logging:
   level: DEBUG                   # DEBUG | INFO | WARNING | ERROR | CRITICAL
