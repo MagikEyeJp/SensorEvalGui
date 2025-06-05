@@ -47,6 +47,8 @@ __all__ = [
     "clipped_snr_model",
     "fit_clipped_snr_model",
     "fit_snr_signal_model",
+    "fit_snr_signal_model_cached",
+    "calculate_dn_at_snr_pspline",
     "calculate_gain_map",
     "calculate_prnu_residual",
 ]
@@ -62,6 +64,7 @@ _dark_cache: Dict[
     tuple[Path, float], Tuple[float, float, np.ndarray, np.ndarray, float]
 ] = {}
 _gain_map_cache: Dict[tuple[Path, float, str], np.ndarray] = {}
+_snr_fit_cache: Dict[tuple, tuple[np.ndarray, np.ndarray]] = {}
 
 
 def clear_cache() -> None:
@@ -70,6 +73,7 @@ def clear_cache() -> None:
     _stats_cache.clear()
     _dark_cache.clear()
     _gain_map_cache.clear()
+    _snr_fit_cache.clear()
 
 
 def _load_stack_cached(folder: Path) -> np.ndarray:
@@ -1466,7 +1470,7 @@ def fit_clipped_snr_model(
     estimated.
     """
 
-    signal = np.asarray(signal, dtype=float)
+    signal = np.asarray(signal, dtype=float) - black_level
     snr = np.asarray(snr, dtype=float)
 
     mask = np.isfinite(signal) & np.isfinite(snr)
@@ -1570,12 +1574,13 @@ def fit_snr_signal_model(
     snr = snr[order]
 
     if max_signal is not None and np.isfinite(max_signal):
-        mask = signal <= max_signal
+        limit = max_signal - black_level
+        mask = signal <= limit
         signal = signal[mask]
         snr = snr[mask]
         if signal.size == 0:
-            xs = np.linspace(0.0, max_signal, num_points)
-            return xs, np.full_like(xs, np.nan)
+            xs = np.linspace(0.0, limit, num_points)
+            return xs + black_level, np.full_like(xs, np.nan)
 
     xs, ys, _, _ = robust_p_spline_fit(
         signal,
@@ -1589,12 +1594,13 @@ def fit_snr_signal_model(
     )
 
     if max_signal is not None and np.isfinite(max_signal):
-        mask = xs <= max_signal
+        limit = max_signal - black_level
+        mask = xs <= limit
         xs = xs[mask]
         ys = ys[mask]
 
     ys = np.maximum.accumulate(np.maximum(ys, 0.0))
-    return xs, ys
+    return xs + black_level, ys
 
 
 def fit_noise_signal_model(
@@ -1636,3 +1642,157 @@ def fit_noise_signal_model(
     )
 
     return xs, ys
+
+
+def _snr_fit_key(
+    signal: np.ndarray,
+    snr: np.ndarray,
+    adc_full_scale: float,
+    black_level: float,
+    deg: int,
+    n_splines: int | str,
+    lam: float | None,
+    knot_density: str,
+    robust: str,
+    num_points: int,
+    max_signal: float | None,
+) -> tuple:
+    import hashlib
+
+    h = hashlib.sha1()
+    h.update(np.ascontiguousarray(signal).tobytes())
+    h.update(np.ascontiguousarray(snr).tobytes())
+    arr_hash = h.hexdigest()
+    return (
+        arr_hash,
+        float(adc_full_scale),
+        float(black_level),
+        int(deg),
+        str(n_splines),
+        None if lam is None else float(lam),
+        knot_density,
+        robust,
+        int(num_points),
+        None if max_signal is None else float(max_signal),
+    )
+
+
+def fit_snr_signal_model_cached(
+    signal: np.ndarray,
+    snr: np.ndarray,
+    adc_full_scale: float,
+    black_level: float = 0.0,
+    *,
+    deg: int = 3,
+    n_splines: int | str = "auto",
+    lam: float | None = None,
+    knot_density: str = "auto",
+    robust: str = "huber",
+    num_points: int = 400,
+    max_signal: float | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Cached wrapper around :func:`fit_snr_signal_model`."""
+
+    key = _snr_fit_key(
+        signal,
+        snr,
+        adc_full_scale,
+        black_level,
+        deg,
+        n_splines,
+        lam,
+        knot_density,
+        robust,
+        num_points,
+        max_signal,
+    )
+    cached = _snr_fit_cache.get(key)
+    if cached is not None:
+        return cached
+
+    xs, ys = fit_snr_signal_model(
+        signal,
+        snr,
+        adc_full_scale,
+        black_level,
+        deg=deg,
+        n_splines=n_splines,
+        lam=lam,
+        knot_density=knot_density,
+        robust=robust,
+        num_points=num_points,
+        max_signal=max_signal,
+    )
+    _snr_fit_cache[key] = (xs, ys)
+    return xs, ys
+
+
+def calculate_dn_at_snr_pspline(
+    signal: np.ndarray,
+    snr_lin: np.ndarray,
+    threshold_db: float,
+    adc_full_scale: float,
+    black_level: float = 0.0,
+    *,
+    deg: int = 3,
+    n_splines: int | str = "auto",
+    lam: float | None = None,
+    knot_density: str = "auto",
+    robust: str = "huber",
+    num_points: int = 400,
+    use_cache: bool = True,
+) -> float:
+    """Return DN at SNR threshold using a P-spline fit."""
+
+    sig = np.asarray(signal, dtype=float) - black_level
+    snr = np.asarray(snr_lin, dtype=float)
+    mask = np.isfinite(sig) & np.isfinite(snr)
+    sig = sig[mask]
+    snr = snr[mask]
+    if sig.size == 0:
+        return float("nan")
+
+    if use_cache:
+        xs, ys = fit_snr_signal_model_cached(
+            sig,
+            snr,
+            adc_full_scale - black_level,
+            black_level=0.0,
+            deg=deg,
+            n_splines=n_splines,
+            lam=lam,
+            knot_density=knot_density,
+            robust=robust,
+            num_points=num_points,
+            max_signal=None,
+        )
+    else:
+        xs, ys = fit_snr_signal_model(
+            sig,
+            snr,
+            adc_full_scale - black_level,
+            black_level=0.0,
+            deg=deg,
+            n_splines=n_splines,
+            lam=lam,
+            knot_density=knot_density,
+            robust=robust,
+            num_points=num_points,
+            max_signal=None,
+        )
+
+    thr_lin = 10 ** (threshold_db / 20.0)
+    idx = np.where(ys >= thr_lin)[0]
+    if idx.size == 0:
+        return float("nan")
+    if idx[0] == 0:
+        dn = xs[0]
+    else:
+        x0, x1 = xs[idx[0] - 1], xs[idx[0]]
+        y0, y1 = ys[idx[0] - 1], ys[idx[0]]
+        if y1 == y0:
+            dn = x1
+        else:
+            r = (thr_lin - y0) / (y1 - y0)
+            dn = x0 + r * (x1 - x0)
+    return float(dn + black_level)
