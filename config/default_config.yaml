@@ -55,11 +55,11 @@ processing:
   prnu_fit: LS                     # LS or WLS regression method
   exclude_abnormal_snr: true       # Ignore low‑SNR patches
   snr_fit:
-    deg: 3                        # Polynomial degree for P-spline fit
-    n_splines: auto               # Number of B-splines or 'auto'
-    lam: null                     # Smoothing parameter or null
+    deg: 3                        # Polynomial degree for P-spline fit (deg<n_splines)
+    n_splines: auto               # Number of B-splines or 'auto'(10〜30)
+    lam: null                     # Smoothing parameter or null(1e-3〜1e2)
     knot_density: auto            # 'auto' | 'uniform' | 'endpoint' | 'adaptive'
-    robust: huber                 # Robust weight function
+    robust: huber                 # Robust weight function 'huber' | 'tukey' | 'none'
     num_points: 400               # Points in fitted curve
 
 plot:
