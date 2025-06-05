@@ -76,16 +76,16 @@ output:
   debug_stacks: false              # Save intermediate stack images
   snr_signal_data: false           # Save SNR-Signal curve data
   report_order:
-    - Dynamic Range (dB)
-    - SNR @ 50% (dB)
+    - Dynamic Range
+    - SNR @ 50%
     - DN @ 10 dB
     - DN @ 0 dB
-    - Read Noise (DN)
-    - Black level (DN)
-    - DSNU (DN)
+    - Read Noise
+    - Black level
+    - DSNU
     - DN_sat
-    - PRNU (%)
-    - System Sensitivity
+    - Pseudo PRNU
+    - SensitivityDN
 
 logging:
   level: INFO                   # DEBUG | INFO | WARNING | ERROR | CRITICAL

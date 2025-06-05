@@ -8,6 +8,7 @@ from typing import Dict, Any, Mapping
 from datetime import datetime
 
 from utils import config as cfgutil
+from utils.metrics import format_metric
 import base64
 import json
 import csv
@@ -80,7 +81,7 @@ def save_summary_txt(
             header = ["Metric"] + [f"{g:.0f} dB" for g in sorted(summary)]
             rows: list[list[str]] = []
             for key in metrics:
-                row = [key]
+                row = [format_metric(key)]
                 for gain in sorted(summary):
                     val = summary[gain].get(key, float("nan"))
                     if isinstance(val, (int, float)):
@@ -130,15 +131,15 @@ def report_html(
     order = cfg.get("output", {}).get(
         "report_order",
         [
-            "Dynamic Range (dB)",
-            "SNR @ 50% (dB)",
+            "Dynamic Range",
+            "SNR @ 50%",
             "DN @ 10 dB",
             "DN @ 0 dB",
-            "Read Noise (DN)",
-            "DSNU (DN)",
+            "Read Noise",
+            "DSNU",
             "DN_sat",
-            "PRNU (%)",
-            "System Sensitivity",
+            "Pseudo PRNU",
+            "SensitivityDN",
         ],
     )
 
@@ -149,10 +150,11 @@ def report_html(
         lines = _meta_lines(cfg)
         for k in order:
             val = summary.get(k, "—")
+            label = format_metric(k)
             if isinstance(val, (int, float)):
-                lines.append(f"{k}: {val:.3f}")
+                lines.append(f"{label}: {val:.3f}")
             else:
-                lines.append(f"{k}: {val}")
+                lines.append(f"{label}: {val}")
         summary_text = "\n".join(lines)
 
     html = [
