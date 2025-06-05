@@ -247,15 +247,15 @@ def run_pipeline(
 
                 dyn_range_g = calculate_dynamic_range_dn(dn_sat_gain, rn)
                 per_gain[gain_db] = {
-                    "Dynamic Range (dB)": dyn_range_g,
-                    "DSNU (DN)": dsnu,
-                    "Read Noise (DN)": rn,
-                    "Black level (DN)": black_level,
+                    "Dynamic Range": dyn_range_g,
+                    "DSNU": dsnu,
+                    "Read Noise": rn,
+                    "Black level": black_level,
                     "DN_sat": dn_sat_gain,
-                    "Pseudo PRNU (%)": prnu,
-                    "System Sensitivity": sens,
+                    "Pseudo PRNU": prnu,
+                    "SensitivityDN": sens,
                     "DN @ 10 dB": dn_at_10_g,
-                    "SNR @ 50% (dB)": snr_at_50_g,
+                    "SNR @ 50%": snr_at_50_g,
                     "DN @ 0 dB": dn_at_0_g,
                 }
 
@@ -311,15 +311,15 @@ def run_pipeline(
             stats_rows = roi_table
             report_csv(stats_rows, cfg, out_dir / "roi_stats.csv")
             summary_avg = {
-                "Dynamic Range (dB)": dyn_range,
-                "DSNU (DN)": dsnu,
-                "Read Noise (DN)": read_noise,
-                "Black level (DN)": black_level,
+                "Dynamic Range": dyn_range,
+                "DSNU": dsnu,
+                "Read Noise": read_noise,
+                "Black level": black_level,
                 "DN_sat": dn_sat,
-                "Pseudo PRNU (%)": prnu,
-                "System Sensitivity": system_sens,
+                "Pseudo PRNU": prnu,
+                "SensitivityDN": system_sens,
                 "DN @ 10 dB": dn_at_10,
-                "SNR @ 50% (dB)": snr_at_50,
+                "SNR @ 50%": snr_at_50,
                 "DN @ 0 dB": dn_at_0,
             }
             save_summary_txt(per_gain, cfg, out_dir / "summary.txt")
