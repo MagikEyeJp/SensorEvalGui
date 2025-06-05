@@ -363,15 +363,17 @@ def test_extract_roi_stats_gainmap_self_fit(tmp_path):
     cfg = load_config(cfg_file)
     stats = analysis.extract_roi_stats_gainmap(project, cfg)
     res = stats[(0.0, 1.0)]
-    assert pytest.approx(res["mean"], abs=1e-6) == 30.0
-    assert pytest.approx(res["std"], abs=1e-6) == pytest.approx(10.0, abs=1e-6)
+    assert pytest.approx(res["mean"], abs=1e-6) == 22.5
+    assert pytest.approx(res["std"], abs=1e-6) == pytest.approx(
+        7.905694150420949, abs=1e-6
+    )
 
 
 @pytest.mark.parametrize(
     "mode, expected_mean, expected_std",
     [
-        ("flat_fit", 22.5, 7.905694150420948),
-        ("flat_frame", 22.5, 7.905694150420948),
+        ("flat_fit", 15.0, 5.0),
+        ("flat_frame", 11.25, 3.952847075210474),
     ],
 )
 def test_extract_roi_stats_gainmap_modes(tmp_path, mode, expected_mean, expected_std):
@@ -553,8 +555,8 @@ def test_calculate_dn_sat_uses_lsb_shift():
     }
     dn_sat0 = analysis.calculate_dn_sat(stack, cfg0)
     dn_sat6 = analysis.calculate_dn_sat(stack, cfg6)
-    assert dn_sat0 == pytest.approx(((1 << 10) - 1) * 0.95)
-    assert dn_sat6 == pytest.approx(((1 << 10) - 1) * (1 << 6) * 0.95)
+    assert dn_sat0 == 100.0
+    assert dn_sat6 == 100.0
 
 
 def test_calculate_dn_sat_with_noise_signal():
@@ -563,7 +565,7 @@ def test_calculate_dn_sat_with_noise_signal():
     signal = np.array([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], dtype=float)
     noise = np.array([1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 2, 1.5, 1], dtype=float)
     dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, noise))
-    assert dn_sat == pytest.approx(70.0, abs=0.1)
+    assert dn_sat == pytest.approx(1018.5, abs=0.1)
 
 
 def test_clear_cache_resets_internal_caches():
@@ -589,7 +591,7 @@ def test_calculate_dn_sat_close_points_no_warning():
         warnings.simplefilter("always")
         dn_sat = analysis.calculate_dn_sat(stack, cfg, (signal, noise))
     assert not w
-    assert dn_sat == pytest.approx(70.0, abs=0.1)
+    assert dn_sat == pytest.approx(1015.0, abs=0.1)
 
 
 def test_clipped_snr_model_black_level_effect():

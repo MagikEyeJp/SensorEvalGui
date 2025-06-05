@@ -1079,55 +1079,33 @@ def calculate_dark_noise_gain(
     return result
 
 
-def _estimate_sat_from_noise(signal: np.ndarray, noise: np.ndarray) -> float:
-    """Return DN level where the noise curve starts to drop sharply."""
+def _estimate_sat_from_noise(
+    signal: np.ndarray, noise: np.ndarray, adc_full_scale: float
+) -> float:
+    """Return ``DN_sat`` estimated from the noise curve.
 
-    if signal.size < 3 or noise.size != signal.size:
+    ``DN_sat`` is computed as ``ADC_full_scale`` minus the noise value at the
+    last point where the noise monotonically increases with signal. If such a
+    point cannot be found, ``ADC_full_scale`` minus the maximum noise is used
+    instead.
+    """
+
+    if signal.size < 2 or noise.size != signal.size:
         return float("nan")
 
     idx = np.argsort(signal)
-    sig = np.asarray(signal, dtype=float)[idx]
     n = np.asarray(noise, dtype=float)[idx]
 
-    diffs = np.diff(sig)
-    close_idx = np.where(np.abs(diffs) < 1.0)[0]
-    if close_idx.size > 0:
-        merged_sig = []
-        merged_n = []
-        i = 0
-        while i < sig.size:
-            j = i + 1
-            while j < sig.size and abs(sig[j] - sig[j - 1]) < 1.0:
-                j += 1
-            if j - i > 1:
-                merged_sig.append(float(np.mean(sig[i:j])))
-                merged_n.append(float(np.mean(n[i:j])))
-            else:
-                merged_sig.append(float(sig[i]))
-                merged_n.append(float(n[i]))
-            i = j
-        sig = np.asarray(merged_sig)
-        n = np.asarray(merged_n)
+    turn_noise = None
+    for i in range(n.size - 1):
+        if n[i + 1] < n[i]:
+            turn_noise = float(n[i])
+            break
 
-    uniq_sig, inv_idx = np.unique(sig, return_inverse=True)
-    if uniq_sig.size != sig.size:
-        uniq_n = [float(np.mean(n[inv_idx == i])) for i in range(uniq_sig.size)]
-        sig = uniq_sig
-        n = np.asarray(uniq_n)
+    if turn_noise is None:
+        turn_noise = float(n.max())
 
-    if sig.size >= 4:
-        try:
-            spline = UnivariateSpline(sig, n, s=0.0, k=3)
-            xs = np.linspace(float(sig.min()), float(sig.max()), max(5 * sig.size, 400))
-            second = spline.derivative(2)(xs)
-            idx_drop = int(np.argmin(second[::-1]))
-            return float(xs[::-1][idx_drop])
-        except Exception:
-            pass
-
-    d1 = np.gradient(n, sig)
-    idx_drop = int(np.argmin(d1))
-    return float(sig[idx_drop])
+    return float(adc_full_scale - turn_noise)
 
 
 def calculate_dn_sat(
@@ -1151,15 +1129,15 @@ def calculate_dn_sat(
     Returns
     -------
     float
-        Detected saturation DN value limited by ``sat_factor`` and the ADC full
-        scale.
+        Estimated saturation DN value clamped to the ADC full scale.
     """
-    p999 = float(np.percentile(flat_stack, 99.9))
-    logging.info("calculate_dn_sat: p999=%.3f", p999)
+    adc_full_scale = cfgutil.adc_full_scale(cfg)
 
     if noise_signal is not None:
         sig, noise = noise_signal
-        est = _estimate_sat_from_noise(np.asarray(sig), np.asarray(noise))
+        est = _estimate_sat_from_noise(
+            np.asarray(sig), np.asarray(noise), adc_full_scale
+        )
         logging.info("calculate_dn_sat: noise_est=%.3f", est)
     else:
         est = float("nan")
@@ -1173,34 +1151,15 @@ def calculate_dn_sat(
         count = max(1, int(flat_sorted.size * 0.01))
         est = float(np.mean(flat_sorted[-count:]))
         logging.info("calculate_dn_sat: fallback_est=%.3f", est)
-    sat_factor = cfg.get("illumination", {}).get(
-        "sat_factor",
-        cfg.get("reference", {}).get("sat_factor", 0.95),
-    )
 
-    adc_full_scale = cfgutil.adc_full_scale(cfg)
-
-    # Reference threshold based on the configured saturation factor
-    reference_thresh = adc_full_scale * sat_factor
-
+    dn_sat = min(float(est), float(adc_full_scale))
     logging.info(
-        "calculate_dn_sat: sat_factor=%.3f adc_full_scale=%d reference_thresh=%.3f",
-        sat_factor,
-        adc_full_scale,
-        reference_thresh,
-    )
-
-    dn_sat = max(est, p999, reference_thresh)
-    dn_sat_final = min(dn_sat, adc_full_scale)
-    logging.info(
-        "calculate_dn_sat: chosen=max(est=%.3f, p999=%.3f, ref=%.3f)=%.3f -> %.3f",
+        "calculate_dn_sat: dn_sat=%.3f adc_full_scale=%d -> %.3f",
         est,
-        p999,
-        reference_thresh,
+        adc_full_scale,
         dn_sat,
-        dn_sat_final,
     )
-    return dn_sat_final
+    return dn_sat
 
 
 def calculate_dynamic_range_dn(dn_sat: float, read_noise: float) -> float:
