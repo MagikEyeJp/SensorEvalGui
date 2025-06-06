@@ -77,9 +77,13 @@ Run the GUI using `python main.py`
         •       📄 report.html: Embedded HTML report
         •       📌 Metrics include SNR @ 50%, DN @ SNR=1 (0 dB), and Black level (DN)
         •       📑 roi_stats.csv: Per-condition stats
+        •       🗒 snr_signal.json: SNR-Signal data (linear SNR)
 
 For a comprehensive description of each output file, refer to
 [Sensor_Output_Spec.md](Sensor_Output_Spec.md).
+
+The `snr` and `fit_snr` arrays in `snr_signal.json` hold linear SNR values. Convert
+them to dB with `20*log10(value)` when plotting or analyzing.
 
 ##📐 Robust P-spline SNR Fitting
 
