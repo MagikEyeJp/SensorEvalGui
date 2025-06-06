@@ -671,29 +671,15 @@ def test_calculate_dn_at_snr_extrapolation_high():
     assert val == pytest.approx(31.6227766016, rel=1e-6)
 
 
-def test_calculate_dn_at_snr_pspline_extrapolation_low():
+def test_calculate_dn_at_snr_polyfit_extrapolation_low():
     sig = np.array([10.0, 20.0, 30.0])
     snr = np.array([15.0, 20.0, 25.0])
-    val = analysis.calculate_dn_at_snr_pspline(
-        sig,
-        snr,
-        10.0,
-        120.0,
-        use_cache=False,
-        num_points=10,
-    )
-    assert val == pytest.approx(0.0, abs=0.5)
+    val = analysis.calculate_dn_at_snr_polyfit(sig, snr, 10.0)
+    assert np.isnan(val)
 
 
-def test_calculate_dn_at_snr_pspline_extrapolation_high():
+def test_calculate_dn_at_snr_polyfit_extrapolation_high():
     sig = np.array([10.0, 20.0, 30.0])
     snr = np.array([1.0, 2.0, 3.0])
-    val = analysis.calculate_dn_at_snr_pspline(
-        sig,
-        snr,
-        10.0,
-        120.0,
-        use_cache=False,
-        num_points=10,
-    )
+    val = analysis.calculate_dn_at_snr_polyfit(sig, snr, 10.0)
     assert val == pytest.approx(31.6227766016, rel=1e-6)
