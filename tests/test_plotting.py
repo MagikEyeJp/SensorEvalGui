@@ -6,10 +6,22 @@ np = pytest.importorskip("numpy")
 from core import plotting
 
 
-def test_plot_snr_vs_exposure_invalid(tmp_path):
-    data = {0.0: (np.array([1.0, -2.0]), np.array([1.0, 2.0]))}
-    with pytest.raises(ValueError):
-        plotting.plot_snr_vs_exposure(data, {}, tmp_path / "out.png")
+def test_clip_nonpositive():
+    arr = np.array([0.0, -1.0, 2.0])
+    out = plotting._clip_nonpositive(arr, eps=1e-3)
+    assert np.all(out == np.array([1e-3, 1e-3, 2.0]))
+
+
+def test_plot_snr_vs_exposure_clip(tmp_path):
+    data = {0.0: (np.array([1.0, 2.0]), np.array([1.0, -3.0]))}
+    fig = plotting.plot_snr_vs_exposure(
+        data,
+        {},
+        tmp_path / "out.png",
+        return_fig=True,
+    )
+    assert (tmp_path / "out.png").is_file()
+    assert np.isfinite(fig.axes[0].lines[0].get_ydata()).all()
 
 
 def test_plot_snr_vs_exposure_single_ideal(tmp_path):
@@ -23,7 +35,11 @@ def test_plot_snr_vs_exposure_single_ideal(tmp_path):
         tmp_path / "exp.png",
         return_fig=True,
     )
-    ideal_lines = [l for l in fig.axes[0].lines if l.get_color() == "k" and l.get_linestyle() == "--"]
+    ideal_lines = [
+        l
+        for l in fig.axes[0].lines
+        if l.get_color() == "k" and l.get_linestyle() == "--"
+    ]
     assert len(ideal_lines) == 1
 
 
@@ -69,15 +85,17 @@ def test_plot_snr_vs_signal_multi_interp(tmp_path):
     assert len(fig.axes[0].lines[1].get_xdata()) == 5
 
 
-def test_plot_snr_vs_signal_multi_invalid(tmp_path):
+def test_plot_snr_vs_signal_multi_clip(tmp_path):
     data = {0.0: (np.array([1.0]), np.array([-1.0]))}
-    with pytest.raises(ValueError):
-        plotting.plot_snr_vs_signal_multi(
-            data,
-            {},
-            tmp_path / "bad.png",
-            black_levels={0.0: 0.0},
-        )
+    fig = plotting.plot_snr_vs_signal_multi(
+        data,
+        {},
+        tmp_path / "bad.png",
+        return_fig=True,
+        black_levels={0.0: 0.0},
+    )
+    assert (tmp_path / "bad.png").is_file()
+    assert np.isfinite(fig.axes[0].lines[0].get_ydata()).all()
 
 
 def test_plot_noise_vs_signal_multi(tmp_path):
@@ -98,7 +116,9 @@ def test_plot_noise_vs_signal_multi_invalid(tmp_path):
 def test_plot_roi_area(tmp_path):
     img = np.zeros((4, 4))
     rects = [[(0, 0, 2, 2)], [(1, 1, 2, 2)], []]
-    plotting.plot_roi_area([img, img, img], rects, ["a", "b", "c"], tmp_path / "roi.png")
+    plotting.plot_roi_area(
+        [img, img, img], rects, ["a", "b", "c"], tmp_path / "roi.png"
+    )
     assert (tmp_path / "roi.png").is_file()
 
 
@@ -162,4 +182,6 @@ def test_plot_snr_vs_signal_multi_threshold_lines(tmp_path):
     )
     ax = fig.axes[0]
     dotted = [l for l in ax.lines if l.get_linestyle() == ":"]
-    assert any(len(l.get_xdata()) == 2 and l.get_xdata()[0] != l.get_xdata()[1] for l in dotted)
+    assert any(
+        len(l.get_xdata()) == 2 and l.get_xdata()[0] != l.get_xdata()[1] for l in dotted
+    )
