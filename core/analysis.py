@@ -66,6 +66,9 @@ _dark_cache: Dict[
 _gain_map_cache: Dict[tuple[Path, float, str], np.ndarray] = {}
 _snr_fit_cache: Dict[tuple, tuple[np.ndarray, np.ndarray]] = {}
 
+# Number of previous samples inspected when searching for the noise turning point
+_TURN_WINDOW = 3
+
 
 def clear_cache() -> None:
     """Empty cached image stacks and ROI statistics."""
@@ -1088,10 +1091,13 @@ def _estimate_sat_from_noise(
 ) -> float:
     """Return ``DN_sat`` estimated from the noise curve.
 
-    ``DN_sat`` is computed as ``ADC_full_scale`` minus the noise value at the
-    last point where the noise, scanned from the largest signal value,
-    monotonically increases and then turns to decrease. If such a point cannot
-    be found, ``ADC_full_scale`` minus the maximum noise is used instead.
+    Starting from the point with the largest signal, the noise values are
+    scanned backwards. At each step, the previous ``_TURN_WINDOW`` points are inspected.
+    If any noise value in that window is greater than the current one, the
+    search jumps to the index of that higher value and continues. Once no
+    larger value exists within the window, the current noise is used as the
+    turning point. If no suitable turning point can be found, the maximum noise
+    value is used instead.
     """
 
     if signal.size < 2 or noise.size != signal.size:
@@ -1100,11 +1106,17 @@ def _estimate_sat_from_noise(
     idx = np.argsort(signal)
     n = np.asarray(noise, dtype=float)[idx]
 
-    turn_noise = None
-    for i in range(n.size - 1, 0, -1):
-        if n[i - 1] < n[i]:
-            turn_noise = float(n[i])
-            break
+    turn_noise: float | None = None
+
+    i = n.size - 1
+    while i > 0:
+        start = max(0, i - _TURN_WINDOW)
+        window = n[start:i]
+        if window.size and np.any(window > n[i]):
+            i = start + int(np.argmax(window))
+            continue
+        turn_noise = float(n[i])
+        break
 
     if turn_noise is None:
         turn_noise = float(n.max())
