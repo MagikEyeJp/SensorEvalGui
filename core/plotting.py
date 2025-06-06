@@ -104,7 +104,7 @@ def plot_snr_vs_signal_multi(
 
         all_signals.append(sig_p)
         color = ax_snr._get_lines.get_next_color()
-        ax_snr.loglog(
+        ax_snr.plot(
             sig_p,
             20 * np.log10(snr_p),
             linestyle="None",
@@ -132,7 +132,7 @@ def plot_snr_vs_signal_multi(
         xs = xs[mask]
         snr_fit = snr_fit[mask]
         if xs.size:
-            ax_snr.loglog(
+            ax_snr.plot(
                 xs,
                 20 * np.log10(snr_fit),
                 linestyle="-",
@@ -151,7 +151,7 @@ def plot_snr_vs_signal_multi(
                 xs_seg = np.linspace(end, start, 50)
                 ys_seg = np.polyval(coef, xs_seg)
                 mask = ys_seg > 0
-                ax_snr.loglog(
+                ax_snr.plot(
                     xs_seg[mask],
                     20 * np.log10(ys_seg[mask]),
                     linestyle=":",
@@ -167,12 +167,17 @@ def plot_snr_vs_signal_multi(
             xs = np.asarray([x_min * 0.9, x_max * 1.1])
         else:
             xs = np.linspace(x_min, x_max, 200)
-        ax_snr.loglog(xs, 20 * np.log10(np.sqrt(xs)), linestyle=":", label="Ideal √µ")
+        ax_snr.plot(xs, 20 * np.log10(np.sqrt(xs)), linestyle=":", label="Ideal √µ")
 
     ax_snr.axhline(thresh, color="r", linestyle="--", label=f"{thresh:g} dB")
     ax_snr.set_xlabel("Signal (DN)")
     ax_snr.set_ylabel("SNR (dB)")
     ax_snr.set_title("SNR vs Signal")
+    ax_snr.set_xscale("linear")
+    if adc_full_scale > 0:
+        ax_snr.set_xlim(0, adc_full_scale)
+    ax_snr.set_yscale("log")
+    ax_snr.set_ylim(1, None)
     ax_snr.grid(True, which="both")
     ax_snr.legend()
     fig.tight_layout()
@@ -196,6 +201,7 @@ def plot_noise_vs_signal_multi(
 
     logging.info("plot_noise_vs_signal_multi: output=%s", output_path)
     fig, ax = plt.subplots()
+    adc_full_scale = cfgutil.adc_full_scale(cfg)
 
     proc_cfg = cfg.get("processing", {})
     fit_cfg = proc_cfg.get("snr_fit", {})
@@ -206,8 +212,13 @@ def plot_noise_vs_signal_multi(
             sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
             noise = np.asarray([noise[0] * 0.9, noise[0] * 1.1])
         color = ax._get_lines.get_next_color()
-        ax.loglog(
-            sig, noise, marker="o", linestyle="None", color=color, label=f"{gain:g}dB"
+        ax.semilogy(
+            sig,
+            noise,
+            marker="o",
+            linestyle="None",
+            color=color,
+            label=f"{gain:g}dB",
         )
         xs, ys = analysis.fit_noise_signal_model(
             sig,
@@ -219,11 +230,14 @@ def plot_noise_vs_signal_multi(
             robust=fit_cfg.get("robust", "huber"),
             num_points=int(fit_cfg.get("num_points", 400)),
         )
-        ax.loglog(xs, ys, linestyle="-", color=color, label="_nolegend_")
+        ax.semilogy(xs, ys, linestyle="-", color=color, label="_nolegend_")
 
     ax.set_xlabel("Signal (DN)")
     ax.set_ylabel("Noise (DN)")
     ax.set_title("Noise vs Signal")
+    if adc_full_scale > 0:
+        ax.set_xlim(0, adc_full_scale)
+    ax.set_ylim(1, None)
     ax.grid(True, which="both")
     ax.legend()
     fig.tight_layout()
@@ -294,6 +308,9 @@ def plot_snr_vs_exposure(
     plt.xlabel("Exposure Time (ms)")
     plt.ylabel("SNR (dB)")
     plt.title("SNR vs Exposure")
+    plt.xscale("log")
+    plt.xlim(left=1e-9)
+    plt.ylim(1, None)
     plt.grid(True, which="both")
     plt.legend()
     plt.tight_layout()
@@ -315,6 +332,7 @@ def plot_prnu_regression(
 
     fig = plt.figure()
     fit_mode = cfg.get("processing", {}).get("prnu_fit", "LS").upper()
+    adc_full_scale = cfgutil.adc_full_scale(cfg)
     squared = bool(cfg.get("plot", {}).get("prnu_squared", False))
     cmap = plt.cm.get_cmap("tab10")
 
@@ -347,6 +365,10 @@ def plot_prnu_regression(
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.title("PRNU Regression")
+    x_max = adc_full_scale**2 if squared else adc_full_scale
+    if x_max > 0:
+        plt.xlim(0, x_max)
+    plt.ylim(0, None)
     plt.grid(True)
     plt.legend(fontsize=8)
     plt.tight_layout()
