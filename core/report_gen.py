@@ -9,6 +9,7 @@ from datetime import datetime
 
 from utils import config as cfgutil
 from utils.metrics import format_metric
+import numpy as np
 import base64
 import json
 import csv
@@ -85,7 +86,7 @@ def save_summary_txt(
                 for gain in sorted(summary):
                     val = summary[gain].get(key, float("nan"))
                     if isinstance(val, (int, float)):
-                        row.append(f"{val:.3f}")
+                        row.append("---" if np.isnan(val) else f"{val:.3f}")
                     else:
                         row.append(str(val))
                 rows.append(row)

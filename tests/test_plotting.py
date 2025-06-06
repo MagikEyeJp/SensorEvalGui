@@ -184,8 +184,6 @@ def test_plot_snr_vs_signal_multi_threshold_lines(tmp_path):
     dotted = [
         l
         for l in ax.lines
-        if l.get_linestyle() == ":"
-        and len(l.get_xdata()) == 2
-        and l.get_xdata()[0] != l.get_xdata()[1]
+        if l.get_linestyle() == ":" and l.get_label() == "_nolegend_"
     ]
     assert len(dotted) == 1

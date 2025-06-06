@@ -60,7 +60,9 @@ __all__ = [
 # multiple times during a single session.
 _stack_cache: Dict[Path, np.ndarray] = {}
 _stats_cache: Dict[tuple[Path, float, float, bool], Dict[str, float]] = {}
-_dark_cache: Dict[tuple[Path, float], Tuple[float, float, np.ndarray, np.ndarray, float]] = {}
+_dark_cache: Dict[
+    tuple[Path, float], Tuple[float, float, np.ndarray, np.ndarray, float]
+] = {}
 _gain_map_cache: Dict[tuple[Path, float, str], np.ndarray] = {}
 _snr_fit_cache: Dict[tuple, tuple[np.ndarray, np.ndarray]] = {}
 
@@ -85,7 +87,9 @@ def _load_stack_cached(folder: Path) -> np.ndarray:
 # ───────────────────────────── internal helpers
 
 
-def _mask_from_rects(shape: Tuple[int, int], rects: List[Tuple[int, int, int, int]]) -> np.ndarray:
+def _mask_from_rects(
+    shape: Tuple[int, int], rects: List[Tuple[int, int, int, int]]
+) -> np.ndarray:
     mask = np.zeros(shape, bool)
     for l, t, w, h in rects:
         mask[t : t + h, l : l + w] = True
@@ -204,7 +208,9 @@ def fit_gain_map_akima(
     fitted = griddata(pts, vals, (y_full, x_full), method="cubic")
     missing = np.isnan(fitted)
     if np.any(missing):
-        fitted[missing] = griddata(pts, vals, (y_full[missing], x_full[missing]), method="nearest")
+        fitted[missing] = griddata(
+            pts, vals, (y_full[missing], x_full[missing]), method="nearest"
+        )
 
     fitted = np.where(fitted == 0, 1e-6, fitted)
     gain_max = np.max(fitted[mask])
@@ -249,7 +255,9 @@ def fit_gain_map_hermite(
     fitted = griddata(pts, vals, (y_full, x_full), method="cubic")
     missing = np.isnan(fitted)
     if np.any(missing):
-        fitted[missing] = griddata(pts, vals, (y_full[missing], x_full[missing]), method="nearest")
+        fitted[missing] = griddata(
+            pts, vals, (y_full[missing], x_full[missing]), method="nearest"
+        )
 
     fitted = np.where(fitted == 0, 1e-6, fitted)
     gain_max = np.max(fitted[mask])
@@ -417,7 +425,12 @@ def get_gain_map(
         return None
 
     cache_key = None
-    if mode != "self_fit" and project_dir is not None and gain_db is not None and stack is None:
+    if (
+        mode != "self_fit"
+        and project_dir is not None
+        and gain_db is not None
+        and stack is None
+    ):
         cache_key = (Path(project_dir), float(gain_db), mode)
         cached = _gain_map_cache.get(cache_key)
         if cached is not None:
@@ -446,9 +459,9 @@ def get_gain_map(
         )
     else:
         if stack is None:
-            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg["measurement"].get(
-                "flat_lens_folder", "LensFlat"
-            )
+            flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
+                "measurement"
+            ].get("flat_lens_folder", "LensFlat")
             stack = load_image_stack(flat_folder)
             mean_src = np.mean(stack, axis=0)
             logging.info(
@@ -561,7 +574,9 @@ def extract_roi_stats(
     chart_rects = load_rois(chart_roi_file)
     flat_rects = load_rois(flat_roi_file)
 
-    mid_idx = cfg.get("reference", {}).get("roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5))
+    mid_idx = cfg.get("reference", {}).get(
+        "roi_mid_index", cfg.get("measurement", {}).get("roi_mid_index", 5)
+    )
 
     snr_thresh = cfg["processing"].get("snr_threshold_dB", 10.0)
     min_sig_factor = cfg["processing"].get("min_sig_factor", 3.0)
@@ -583,9 +598,9 @@ def extract_roi_stats(
         if apply_gain and mode != "self_fit":
             flat_stack = flat_cache.get(gain_db)
             if flat_stack is None:
-                flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg["measurement"].get(
-                    "flat_lens_folder", "LensFlat"
-                )
+                flat_folder = cfgutil.find_gain_folder(project_dir, gain_db, cfg) / cfg[
+                    "measurement"
+                ].get("flat_lens_folder", "LensFlat")
                 if status:
                     status(f"Loading flat frames for gain {gain_db:.1f} dB")
                 flat_stack = _load_stack_cached(flat_folder)
@@ -598,7 +613,9 @@ def extract_roi_stats(
                     project_dir=project_dir,
                     gain_db=gain_db,
                     stack=flat_stack,
-                    noise_signal=(None if noise_signals is None else noise_signals.get(gain_db)),
+                    noise_signal=(
+                        None if noise_signals is None else noise_signals.get(gain_db)
+                    ),
                 )
                 gain_map_cache[gain_db] = gain_map_per_gain
 
@@ -607,7 +624,9 @@ def extract_roi_stats(
             if not folder.is_dir():
                 logging.info("Skipping missing folder: %s", folder)
                 continue
-            logging.info("Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio)
+            logging.info(
+                "Processing folder %s (%.1f dB, %.3fx)", folder, gain_db, ratio
+            )
             if status:
                 status(f"Loading images for gain {gain_db:.1f} dB")
             stack = _load_stack_cached(folder)
@@ -623,7 +642,11 @@ def extract_roi_stats(
                         project_dir=project_dir,
                         gain_db=gain_db,
                         stack=stack,
-                        noise_signal=(None if noise_signals is None else noise_signals.get(gain_db)),
+                        noise_signal=(
+                            None
+                            if noise_signals is None
+                            else noise_signals.get(gain_db)
+                        ),
                     )
                 else:
                     gain_map = gain_map_per_gain
@@ -700,7 +723,9 @@ def extract_roi_stats_gainmap(
     )
 
 
-def extract_roi_table(project_dir: Path | str, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+def extract_roi_table(
+    project_dir: Path | str, cfg: Dict[str, Any]
+) -> List[Dict[str, Any]]:
     """Return ROI statistics formatted for CSV output.
 
     Parameters
@@ -893,7 +918,9 @@ def collect_prnu_points(
     return res
 
 
-def calculate_snr_curve(signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]) -> np.ndarray:
+def calculate_snr_curve(
+    signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, Any]
+) -> np.ndarray:
     """Compute the signal-to-noise ratio for each pixel.
 
     Parameters
@@ -913,7 +940,9 @@ def calculate_snr_curve(signal: np.ndarray, noise: np.ndarray, cfg: Dict[str, An
     return snr
 
 
-def calculate_dynamic_range(snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, Any]) -> float:
+def calculate_dynamic_range(
+    snr: np.ndarray, signal: np.ndarray, cfg: Dict[str, Any]
+) -> float:
     """Estimate dynamic range from the SNR curve.
 
     Parameters
@@ -955,7 +984,9 @@ def _reduce(values: np.ndarray, mode: str) -> float:
     raise ValueError(mode)
 
 
-def calculate_dark_noise(project_dir: Path | str, cfg: Dict[str, Any]) -> Tuple[float, float]:
+def calculate_dark_noise(
+    project_dir: Path | str, cfg: Dict[str, Any]
+) -> Tuple[float, float]:
     """Calculate DSNU and read noise from a dark frame stack.
 
     Parameters
@@ -1052,7 +1083,9 @@ def calculate_dark_noise_gain(
     return result
 
 
-def _estimate_sat_from_noise(signal: np.ndarray, noise: np.ndarray, adc_full_scale: float) -> float:
+def _estimate_sat_from_noise(
+    signal: np.ndarray, noise: np.ndarray, adc_full_scale: float
+) -> float:
     """Return ``DN_sat`` estimated from the noise curve.
 
     ``DN_sat`` is computed as ``ADC_full_scale`` minus the noise value at the
@@ -1106,11 +1139,15 @@ def calculate_dn_sat(
 
     if noise_signal is not None:
         sig, noise = noise_signal
-        est = _estimate_sat_from_noise(np.asarray(sig), np.asarray(noise), adc_full_scale)
+        est = _estimate_sat_from_noise(
+            np.asarray(sig), np.asarray(noise), adc_full_scale
+        )
         logging.info("calculate_dn_sat: noise_est=%.3f", est)
     else:
         est = float("nan")
-        logging.info("calculate_dn_sat: noise_signal not provided; using flat-frame fallback")
+        logging.info(
+            "calculate_dn_sat: noise_signal not provided; using flat-frame fallback"
+        )
 
     if not np.isfinite(est):
         mean_frame = np.mean(flat_stack, axis=0)
@@ -1205,7 +1242,11 @@ def calculate_prnu_residual(
         ``(prnu_percent, residual_map)`` where the residual map matches the image size.
     """
 
-    mask = _mask_from_rects(flat_stack.shape[1:], rects) if rects else np.ones(flat_stack.shape[1:], bool)
+    mask = (
+        _mask_from_rects(flat_stack.shape[1:], rects)
+        if rects
+        else np.ones(flat_stack.shape[1:], bool)
+    )
 
     mean_frame = np.mean(flat_stack, axis=0)
     margin = cfg.get("processing", {}).get("mask_upper_margin")
@@ -1222,7 +1263,11 @@ def calculate_prnu_residual(
         None,
         project_dir=project_dir,
         gain_db=gain_db,
-        stack=(flat_stack if mode == "self_fit" or project_dir is None or gain_db is None else None),
+        stack=(
+            flat_stack
+            if mode == "self_fit" or project_dir is None or gain_db is None
+            else None
+        ),
         noise_signal=noise_signal,
         dn_sat=dn_sat_val,
     )
@@ -1278,7 +1323,11 @@ def calculate_system_sensitivity(
         Sensitivity in DN / (µW·cm⁻²·s). Returns ``0.0`` if the denominator is zero.
     """
 
-    mask = _mask_from_rects(flat_stack.shape[1:], rects) if rects else np.ones(flat_stack.shape[1:], bool)
+    mask = (
+        _mask_from_rects(flat_stack.shape[1:], rects)
+        if rects
+        else np.ones(flat_stack.shape[1:], bool)
+    )
 
     illum = cfg.get("illumination", {})
     power = float(illum.get("power_uW_cm2", 1.0))
@@ -1291,7 +1340,9 @@ def calculate_system_sensitivity(
     return mean_dn / denom
 
 
-def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: float) -> float:
+def calculate_dn_at_snr(
+    signal: np.ndarray, snr_lin: np.ndarray, threshold_db: float
+) -> float:
     """Interpolate the DN value where the SNR reaches ``threshold_db``.
 
     Parameters
@@ -1333,7 +1384,9 @@ def calculate_dn_at_snr(signal: np.ndarray, snr_lin: np.ndarray, threshold_db: f
     return float(x0 + r * (x1 - x0))
 
 
-def calculate_snr_at_half(signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float) -> float:
+def calculate_snr_at_half(
+    signal: np.ndarray, snr_lin: np.ndarray, dn_sat: float
+) -> float:
     """Return the SNR in dB at half of ``dn_sat``.
 
     Parameters
@@ -1474,7 +1527,9 @@ def fit_clipped_snr_model(
         )
 
     try:
-        popt, _ = curve_fit(_model, signal, snr, p0=[1.0], bounds=(0.0, np.inf), maxfev=10000)
+        popt, _ = curve_fit(
+            _model, signal, snr, p0=[1.0], bounds=(0.0, np.inf), maxfev=10000
+        )
     except Exception:
         return 1.0, float(limit_noise)
     return float(popt[0]), float(limit_noise)
@@ -1763,3 +1818,67 @@ def calculate_dn_at_snr_pspline(
         r = (thr_lin - y0) / (y1 - y0)
         dn = x0 + r * (x1 - x0)
     return float(dn + black_level)
+
+
+def _polyfit_low_region(
+    signal: np.ndarray,
+    snr: np.ndarray,
+    *,
+    fraction: float = 0.2,
+    deg: int = 1,
+) -> np.ndarray:
+    """Fit a polynomial to the lowest ``fraction`` of the signal range."""
+
+    sig = np.asarray(signal, dtype=float)
+    snr = np.asarray(snr, dtype=float)
+    mask = np.isfinite(sig) & np.isfinite(snr)
+    sig = sig[mask]
+    snr = snr[mask]
+    if sig.size < 2:
+        return np.array([np.nan])
+
+    order = np.argsort(sig)
+    sig = sig[order]
+    snr = snr[order]
+
+    min_sig = float(sig.min())
+    max_sig = float(sig.max())
+    limit = min_sig + fraction * (max_sig - min_sig)
+    subset_mask = sig <= limit
+    if np.count_nonzero(subset_mask) < deg + 1:
+        subset_mask = np.arange(min(sig.size, deg + 1))
+
+    sig_subset = sig[subset_mask]
+    snr_subset = snr[subset_mask]
+    if sig_subset.size < 2:
+        return np.array([np.nan])
+
+    # apply heavier weights to lower signal values
+    weights = limit - sig_subset
+    weights = np.maximum(weights, 1e-6)
+
+    return np.polyfit(sig_subset, snr_subset, deg, w=weights)
+
+
+def calculate_dn_at_snr_polyfit(
+    signal: np.ndarray,
+    snr_lin: np.ndarray,
+    threshold_db: float,
+    *,
+    fraction: float = 0.2,
+    deg: int = 1,
+) -> float:
+    """Return DN at SNR threshold using a polynomial fit of low values."""
+
+    coeff = _polyfit_low_region(signal, snr_lin, fraction=fraction, deg=deg)
+    if coeff.size == 1 and np.isnan(coeff[0]):
+        return float("nan")
+
+    thr_lin = 10 ** (threshold_db / 20.0)
+    coeff[-1] -= thr_lin
+    roots = np.roots(coeff)
+    roots = roots[np.isreal(roots)].real
+    roots = roots[roots >= 0]
+    if roots.size == 0:
+        return float("nan")
+    return float(np.min(roots))
