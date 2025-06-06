@@ -90,5 +90,5 @@ def test_run_pipeline_returns_summary(tmp_path):
     cfg["measurement"]["exposures"] = {"1.0": {"folder": "chart_1x"}}
     result = run_pipeline(project, cfg)
     assert "summary" in result
-    assert "Dynamic Range (dB)" in result["summary"]
-    assert isinstance(result["summary"]["Dynamic Range (dB)"], float)
+    assert "Dynamic Range" in result["summary"]
+    assert isinstance(result["summary"]["Dynamic Range"], float)
