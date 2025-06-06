@@ -1089,9 +1089,9 @@ def _estimate_sat_from_noise(
     """Return ``DN_sat`` estimated from the noise curve.
 
     ``DN_sat`` is computed as ``ADC_full_scale`` minus the noise value at the
-    last point where the noise monotonically increases with signal. If such a
-    point cannot be found, ``ADC_full_scale`` minus the maximum noise is used
-    instead.
+    last point where the noise, scanned from the largest signal value,
+    monotonically increases and then turns to decrease. If such a point cannot
+    be found, ``ADC_full_scale`` minus the maximum noise is used instead.
     """
 
     if signal.size < 2 or noise.size != signal.size:
@@ -1101,8 +1101,8 @@ def _estimate_sat_from_noise(
     n = np.asarray(noise, dtype=float)[idx]
 
     turn_noise = None
-    for i in range(n.size - 1):
-        if n[i + 1] < n[i]:
+    for i in range(n.size - 1, 0, -1):
+        if n[i - 1] < n[i]:
             turn_noise = float(n[i])
             break
 
