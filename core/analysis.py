@@ -67,7 +67,7 @@ _gain_map_cache: Dict[tuple[Path, float, str], np.ndarray] = {}
 _snr_fit_cache: Dict[tuple, tuple[np.ndarray, np.ndarray]] = {}
 
 # Number of previous samples inspected when searching for the noise turning point
-_TURN_WINDOW = 3
+_TURN_WINDOW = 10
 
 
 def clear_cache() -> None:
