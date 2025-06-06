@@ -162,4 +162,4 @@ def test_plot_snr_vs_signal_multi_threshold_lines(tmp_path):
     )
     ax = fig.axes[0]
     dotted = [l for l in ax.lines if l.get_linestyle() == ":"]
-    assert any(len(l.get_xdata()) == 2 and l.get_xdata()[0] == l.get_xdata()[1] for l in dotted)
+    assert any(len(l.get_xdata()) == 2 and l.get_xdata()[0] != l.get_xdata()[1] for l in dotted)
