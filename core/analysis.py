@@ -1865,7 +1865,11 @@ def _polyfit_low_region(
     if sig_subset.size < 2:
         return np.array([np.nan])
 
-    return np.polyfit(sig_subset, snr_subset, deg)
+    # apply heavier weights to lower signal values
+    weights = limit - sig_subset
+    weights = np.maximum(weights, 1e-6)
+
+    return np.polyfit(sig_subset, snr_subset, deg, w=weights)
 
 
 def calculate_dn_at_snr_polyfit(
