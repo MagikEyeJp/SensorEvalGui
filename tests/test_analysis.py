@@ -683,3 +683,10 @@ def test_calculate_dn_at_snr_polyfit_extrapolation_high():
     snr = np.array([1.0, 2.0, 3.0])
     val = analysis.calculate_dn_at_snr_polyfit(sig, snr, 10.0)
     assert val == pytest.approx(31.6227766016, rel=1e-6)
+
+
+def test_estimate_sat_from_noise_fluctuations():
+    signal = np.arange(8) * 10.0
+    noise = np.array([1.0, 2.0, 3.0, 2.8, 2.9, 2.7, 2.5, 2.4])
+    dn_sat = analysis._estimate_sat_from_noise(signal, noise, 100.0)
+    assert dn_sat == pytest.approx(97.0)
