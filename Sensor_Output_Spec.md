@@ -116,18 +116,18 @@ GUIコンポーネント配置について
 GUI上、および出力画像として出力
 
 グループ SNR-Signal
-* `snr_signal.png`：SNR vs Mean Signal（log-log軸）
-  * 横軸：ROI平均信号（DN）
+* `snr_signal.png`：SNR vs Mean Signal（x軸：線形、y軸：対数）
+  * 横軸：ROI平均信号（DN）。範囲は 0 〜 ADC\_FullScaleDN
   * 対象：Flat画像と グレーチャート画像の両方のROIを使用してμ-SNR系列を構成
-  * 縦軸：SNR（dB）
+  * 縦軸：SNR（dB）。範囲は 1 (10^0dB) 〜 自動
   * このSNR-Signal曲線は summary.txt の DN 指標計算にも共通で使用する。
   * 系列：Gainごと色分け
   * 補助線：理想曲線（√μ）、SNR=10dBライン
 
 グループ SNR-Exposure
 * `snr_exposure.png`：SNR vs Exposure Time（中間階調）
-  * 横軸：露光時間（ms）。Graychart画像の他階調ROIも、中央階調に対するμの比から「擬似露光倍率」として換算し、クラウド状にマッピング可能。
-  * 縦軸：SNR（dB）
+  * 横軸：露光時間（ms）。対数スケール表示で下限は0近傍
+  * 縦軸：SNR（dB）。線形表示で下限1 (10^0dB)
   * 対象：グレースケール ROIの中央階調（config.reference.roi\_mid\_index）
   * 系列：ゲインごとに色分け
 
@@ -138,6 +138,8 @@ GUI上、および出力画像として出力
   * 単位はいずれも DN。`plot.prnu_squared: true` の場合は DN² 表示となる
   * 系列：ゲインごとに色分け（露光倍率も含めた全条件を使用）
   * 回帰法：OLS または WLS（config.processing.prnu\_fit）
+  * 横軸範囲：0 〜 ADC\_FullScaleDN（μ²の場合はその二乗）
+  * 縦軸下限：0
 
 グループ DNSU MAP
 * `dsnu_map.png`：DSNU（遮光画像の画素間オフセット）マップ
