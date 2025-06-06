@@ -71,8 +71,8 @@ Gainごとに下記項目を出力
 * **Dynamic Range (dB)**：最大信号値として DN\_sat を用い、Read Noise (DN) との比から 20\*log10(DN\_sat / Noise) を算出。
 * **SNR @ 50%**：グレースケールチャートまたはフラット画像で、Full-Wellの50%（例：32768 DN）に最も近いμとSNRの系列から、`utils.robust_pspline.robust_p_spline_fit` を利用したロバストPスプライン回帰で推定して算出。
   * DN\_satの基準：config.reference.sat\_factor
-* **DN @ SNR=10dB**：SNRカーブから、SNRが10dB（config.processing.snr\_threshold\_dB）を超える最小DN値をPスプライン回帰曲線から推定。
-* **DN @ SNR=1 (0 dB)**：SNRが1となる最小信号レベル（ノイズと等価）を同回帰曲線から推定。
+* **DN @ SNR=10dB**：SNRカーブから、SNRが10dB（config.processing.snr_threshold_dB）を超える最小DN値をPスプライン回帰曲線から推定。SNRカーブはグレーチャートROIとフラットROIの全てを用いる。
+* **DN @ SNR=1 (0 dB)**：SNRが1となる最小信号レベル（ノイズと等価）を同回帰曲線から推定。SNRカーブは上記と同じく全ROIを使用する。
   * SNRカーブのロバストPスプライン回帰は `processing.snr_fit` セクションで
     次のパラメータを調整できる:
     `deg`, `n_splines`, `lam`, `knot_density`, `robust`, `num_points`。
@@ -120,6 +120,7 @@ GUI上、および出力画像として出力
   * 横軸：ROI平均信号（DN）
   * 対象：Flat画像と グレーチャート画像の両方のROIを使用してμ-SNR系列を構成
   * 縦軸：SNR（dB）
+  * このSNR-Signal曲線は summary.txt の DN 指標計算にも共通で使用する。
   * 系列：Gainごと色分け
   * 補助線：理想曲線（√μ）、SNR=10dBライン
 

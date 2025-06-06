@@ -90,24 +90,24 @@ def run_pipeline(
                 )
                 black_levels[gain_db] = bl
 
-            tuples = sorted(stats.items(), key=lambda kv: kv[1]["mean"])
-            signals = np.array([kv[1]["mean"] for kv in tuples])
-            noises = np.array([kv[1]["std"] for kv in tuples])
-            snr_lin = np.array(
-                [
-                    (kv[1]["mean"] - black_levels.get(kv[0][0], 0.0)) / kv[1]["std"]
-                    for kv in tuples
-                ]
-            )
-            snr_lin = np.maximum(snr_lin, 1.0)
-            ratios = np.array([kv[0][1] for kv in tuples])
-
-            fit_cfg = cfg.get("processing", {}).get("snr_fit", {})
-            adc_full_scale = cfgutil.adc_full_scale(cfg)
-
             roi_table = extract_roi_table(project, cfg)
             snr_signal_data = collect_gain_snr_signal(roi_table, cfg, black_levels)
             noise_signal_data = collect_gain_noise_signal(roi_table, cfg, black_levels)
+
+            if snr_signal_data:
+                sig_list = [v[0] for v in snr_signal_data.values()]
+                snr_list = [v[1] for v in snr_signal_data.values()]
+                signals = np.concatenate(sig_list)
+                snr_lin = np.concatenate(snr_list)
+                order = np.argsort(signals)
+                signals = signals[order]
+                snr_lin = np.maximum(snr_lin[order], 1.0)
+            else:
+                signals = np.array([])
+                snr_lin = np.array([])
+
+            fit_cfg = cfg.get("processing", {}).get("snr_fit", {})
+            adc_full_scale = cfgutil.adc_full_scale(cfg)
             flat_roi_file = project / cfg["measurement"].get("flat_roi_file")
             flat_rects = load_rois(flat_roi_file)
 
@@ -116,13 +116,8 @@ def run_pipeline(
                 stats_corr = extract_roi_stats_gainmap(
                     project, cfg, status=status, noise_signals=noise_signal_data
                 )
-                tuples_c = sorted(stats_corr.items(), key=lambda kv: kv[1]["mean"])
-                signals_corr = np.array([kv[1]["mean"] for kv in tuples_c])
-                noises_corr = np.array([kv[1]["std"] for kv in tuples_c])
                 prnu_stats = stats_corr
             else:
-                signals_corr = signals
-                noises_corr = noises
                 prnu_stats = stats
 
             prnu_data = collect_prnu_points(prnu_stats)
@@ -205,14 +200,10 @@ def run_pipeline(
                     first = False
 
                 # SNR metrics for this gain
-                tuples_g = sorted(
-                    (kv for kv in stats.items() if kv[0][0] == gain_db),
-                    key=lambda kv: kv[1]["mean"],
-                )
-                if tuples_g:
-                    sig_g = np.array([kv[1]["mean"] for kv in tuples_g])
-                    noise_g = np.array([kv[1]["std"] for kv in tuples_g])
-                    snr_lin_g = np.maximum((sig_g - black_level) / noise_g, 1.0)
+                data_g = snr_signal_data.get(gain_db)
+                if data_g is not None:
+                    sig_g, snr_lin_g = data_g
+                    snr_lin_g = np.maximum(snr_lin_g, 1.0)
                     dn_at_10_g = calculate_dn_at_snr_pspline(
                         sig_g,
                         snr_lin_g,
@@ -247,7 +238,7 @@ def run_pipeline(
 
                 dyn_range_g = calculate_dynamic_range_dn(dn_sat_gain, rn)
                 per_gain[gain_db] = {
-                    "Dynamic Range": dyn_range_g,
+                    "Dynamic Range (dB)": dyn_range_g,
                     "DSNU": dsnu,
                     "Read Noise": rn,
                     "Black level": black_level,
@@ -311,7 +302,7 @@ def run_pipeline(
             stats_rows = roi_table
             report_csv(stats_rows, cfg, out_dir / "roi_stats.csv")
             summary_avg = {
-                "Dynamic Range": dyn_range,
+                "Dynamic Range (dB)": dyn_range,
                 "DSNU": dsnu,
                 "Read Noise": read_noise,
                 "Black level": black_level,
