@@ -655,3 +655,45 @@ def test_fit_snr_signal_model_black_level_shift():
     assert np.allclose(fit1, fit2)
     interp = np.interp(sig, xs1, fit1)
     assert np.allclose(interp, snr, rtol=0.05)
+
+
+def test_calculate_dn_at_snr_extrapolation_low():
+    sig = np.array([10.0, 20.0, 30.0])
+    snr = np.array([15.0, 20.0, 25.0])
+    val = analysis.calculate_dn_at_snr(sig, snr, 10.0)
+    assert val == pytest.approx(0.0)
+
+
+def test_calculate_dn_at_snr_extrapolation_high():
+    sig = np.array([10.0, 20.0, 30.0])
+    snr = np.array([1.0, 2.0, 3.0])
+    val = analysis.calculate_dn_at_snr(sig, snr, 10.0)
+    assert val == pytest.approx(31.6227766016, rel=1e-6)
+
+
+def test_calculate_dn_at_snr_pspline_extrapolation_low():
+    sig = np.array([10.0, 20.0, 30.0])
+    snr = np.array([15.0, 20.0, 25.0])
+    val = analysis.calculate_dn_at_snr_pspline(
+        sig,
+        snr,
+        10.0,
+        120.0,
+        use_cache=False,
+        num_points=10,
+    )
+    assert val == pytest.approx(0.0, abs=0.5)
+
+
+def test_calculate_dn_at_snr_pspline_extrapolation_high():
+    sig = np.array([10.0, 20.0, 30.0])
+    snr = np.array([1.0, 2.0, 3.0])
+    val = analysis.calculate_dn_at_snr_pspline(
+        sig,
+        snr,
+        10.0,
+        120.0,
+        use_cache=False,
+        num_points=10,
+    )
+    assert val == pytest.approx(31.6227766016, rel=1e-6)

@@ -74,9 +74,7 @@ def plot_snr_vs_signal_multi(
 
     all_signals = []
     for gain, (sig, snr) in sorted(data.items()):
-        logging.debug(
-            "gain %.1f: sig shape=%s snr shape=%s", gain, sig.shape, snr.shape
-        )
+        logging.debug("gain %.1f: sig shape=%s snr shape=%s", gain, sig.shape, snr.shape)
         sig = _validate_positive_finite(sig, "signal")
         snr = _validate_positive_finite(snr, "snr")
         if sig.size == 1 or snr.size == 1:
@@ -133,6 +131,39 @@ def plot_snr_vs_signal_multi(
                 label="_nolegend_",
             )
 
+        # draw vertical lines for SNR thresholds using extrapolated DN values
+        dn10 = analysis.calculate_dn_at_snr_pspline(
+            sig_p,
+            snr_p,
+            thresh,
+            adc_full_scale,
+            bl,
+            deg=int(snr_cfg.get("deg", 3)),
+            n_splines=snr_cfg.get("n_splines", "auto"),
+            lam=snr_cfg.get("lam"),
+            knot_density=snr_cfg.get("knot_density", "auto"),
+            robust=snr_cfg.get("robust", "huber"),
+            num_points=int(snr_cfg.get("num_points", 400)),
+            use_cache=False,
+        )
+        dn0 = analysis.calculate_dn_at_snr_pspline(
+            sig_p,
+            snr_p,
+            0.0,
+            adc_full_scale,
+            bl,
+            deg=int(snr_cfg.get("deg", 3)),
+            n_splines=snr_cfg.get("n_splines", "auto"),
+            lam=snr_cfg.get("lam"),
+            knot_density=snr_cfg.get("knot_density", "auto"),
+            robust=snr_cfg.get("robust", "huber"),
+            num_points=int(snr_cfg.get("num_points", 400)),
+            use_cache=False,
+        )
+        for dn in (dn0, dn10):
+            if np.isfinite(dn):
+                ax_snr.axvline(dn, color=color, linestyle=":", label="_nolegend_")
+
     if all_signals:
         concat = np.concatenate(all_signals)
         x_min = float(concat.min())
@@ -180,9 +211,7 @@ def plot_noise_vs_signal_multi(
             sig = np.asarray([sig[0] * 0.9, sig[0] * 1.1])
             noise = np.asarray([noise[0] * 0.9, noise[0] * 1.1])
         color = ax._get_lines.get_next_color()
-        ax.loglog(
-            sig, noise, marker="o", linestyle="None", color=color, label=f"{gain:g}dB"
-        )
+        ax.loglog(sig, noise, marker="o", linestyle="None", color=color, label=f"{gain:g}dB")
         xs, ys = analysis.fit_noise_signal_model(
             sig,
             noise,
@@ -232,9 +261,7 @@ def plot_snr_vs_exposure(
 
     fig = plt.figure()
     sorted_items = sorted(data.items())
-    ideal_gain = (
-        0.0 if any(abs(g - 0.0) < 1e-6 for g, _ in sorted_items) else sorted_items[0][0]
-    )
+    ideal_gain = 0.0 if any(abs(g - 0.0) < 1e-6 for g, _ in sorted_items) else sorted_items[0][0]
 
     for gain, (ratios, snr) in sorted_items:
         ratios = _validate_positive_finite(ratios, "exposure ratios")
@@ -372,9 +399,7 @@ def plot_roi_area(
         ax = plt.subplot(1, n, i)
         ax.imshow(img, cmap="gray")
         for l, t, w, h in rs:
-            rect = plt.Rectangle(
-                (l, t), w, h, edgecolor="r", facecolor="none", linewidth=1
-            )
+            rect = plt.Rectangle((l, t), w, h, edgecolor="r", facecolor="none", linewidth=1)
             ax.add_patch(rect)
         ax.set_title(title)
         ax.set_axis_off()
