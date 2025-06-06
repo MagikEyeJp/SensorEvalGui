@@ -131,38 +131,40 @@ def plot_snr_vs_signal_multi(
                 label="_nolegend_",
             )
 
-        # draw vertical lines for SNR thresholds using extrapolated DN values
-        dn10 = analysis.calculate_dn_at_snr_pspline(
-            sig_p,
-            snr_p,
-            thresh,
-            adc_full_scale,
-            bl,
-            deg=int(snr_cfg.get("deg", 3)),
-            n_splines=snr_cfg.get("n_splines", "auto"),
-            lam=snr_cfg.get("lam"),
-            knot_density=snr_cfg.get("knot_density", "auto"),
-            robust=snr_cfg.get("robust", "huber"),
-            num_points=int(snr_cfg.get("num_points", 400)),
-            use_cache=False,
-        )
-        dn0 = analysis.calculate_dn_at_snr_pspline(
-            sig_p,
-            snr_p,
-            0.0,
-            adc_full_scale,
-            bl,
-            deg=int(snr_cfg.get("deg", 3)),
-            n_splines=snr_cfg.get("n_splines", "auto"),
-            lam=snr_cfg.get("lam"),
-            knot_density=snr_cfg.get("knot_density", "auto"),
-            robust=snr_cfg.get("robust", "huber"),
-            num_points=int(snr_cfg.get("num_points", 400)),
-            use_cache=False,
-        )
-        for dn in (dn0, dn10):
-            if np.isfinite(dn):
-                ax_snr.axvline(dn, color=color, linestyle=":", label="_nolegend_")
+        # plot extrapolated SNR segments toward threshold crossings
+        for thr_db in (0.0, thresh):
+            dn = analysis.calculate_dn_at_snr_pspline(
+                sig_p,
+                snr_p,
+                thr_db,
+                adc_full_scale,
+                bl,
+                deg=int(snr_cfg.get("deg", 3)),
+                n_splines=snr_cfg.get("n_splines", "auto"),
+                lam=snr_cfg.get("lam"),
+                knot_density=snr_cfg.get("knot_density", "auto"),
+                robust=snr_cfg.get("robust", "huber"),
+                num_points=int(snr_cfg.get("num_points", 400)),
+                use_cache=False,
+            )
+            if not np.isfinite(dn) or xs.size < 2:
+                continue
+            thr_lin = 10 ** (thr_db / 20.0)
+            if dn > xs[-1]:
+                x_seg = np.array([xs[-1], dn])
+                y_seg = np.array([snr_fit[-1], thr_lin])
+            elif dn < xs[0]:
+                x_seg = np.array([dn, xs[0]])
+                y_seg = np.array([thr_lin, snr_fit[0]])
+            else:
+                continue
+            ax_snr.loglog(
+                x_seg,
+                20 * np.log10(y_seg),
+                linestyle=":",
+                color=color,
+                label="_nolegend_",
+            )
 
     if all_signals:
         concat = np.concatenate(all_signals)
