@@ -140,50 +140,24 @@ def plot_snr_vs_signal_multi(
                 label="_nolegend_",
             )
 
-        # plot extrapolated SNR segment between 0 dB and threshold crossings
-        dn_zero = analysis.calculate_dn_at_snr_pspline(
-            sig_p,
-            snr_p,
-            0.0,
-            adc_full_scale,
-            bl,
-            deg=int(snr_cfg.get("deg", 3)),
-            n_splines=snr_cfg.get("n_splines", "auto"),
-            lam=snr_cfg.get("lam"),
-            knot_density=snr_cfg.get("knot_density", "auto"),
-            robust=snr_cfg.get("robust", "huber"),
-            num_points=int(snr_cfg.get("num_points", 400)),
-            use_cache=False,
-        )
-        dn_thr = analysis.calculate_dn_at_snr_pspline(
-            sig_p,
-            snr_p,
-            thresh,
-            adc_full_scale,
-            bl,
-            deg=int(snr_cfg.get("deg", 3)),
-            n_splines=snr_cfg.get("n_splines", "auto"),
-            lam=snr_cfg.get("lam"),
-            knot_density=snr_cfg.get("knot_density", "auto"),
-            robust=snr_cfg.get("robust", "huber"),
-            num_points=int(snr_cfg.get("num_points", 400)),
-            use_cache=False,
-        )
-        if (
-            np.isfinite(dn_zero)
-            and np.isfinite(dn_thr)
-            and xs.size >= 2
-            and not (min(dn_zero, dn_thr) >= xs[0] and max(dn_zero, dn_thr) <= xs[-1])
-        ):
-            x_seg = np.array([dn_zero, dn_thr])
-            y_seg = np.array([1.0, 10 ** (thresh / 20.0)])
-            ax_snr.loglog(
-                x_seg,
-                20 * np.log10(y_seg),
-                linestyle=":",
-                color=color,
-                label="_nolegend_",
-            )
+        # plot extrapolated SNR segment between low-signal fit and threshold crossings
+        dn_zero = analysis.calculate_dn_at_snr_polyfit(sig_p, snr_p, 0.0)
+        dn_thr = analysis.calculate_dn_at_snr_polyfit(sig_p, snr_p, thresh)
+        start = dn_zero if np.isfinite(dn_zero) else dn_thr
+        if np.isfinite(start):
+            coef = analysis._polyfit_low_region(sig_p, snr_p)
+            if coef.size > 1 and not np.isnan(coef[0]):
+                end = float(np.min(sig_p))
+                xs_seg = np.linspace(end, start, 50)
+                ys_seg = np.polyval(coef, xs_seg)
+                mask = ys_seg > 0
+                ax_snr.loglog(
+                    xs_seg[mask],
+                    20 * np.log10(ys_seg[mask]),
+                    linestyle=":",
+                    color=color,
+                    label="_nolegend_",
+                )
 
     if all_signals:
         concat = np.concatenate(all_signals)
